@@ -21,15 +21,15 @@ GL0AM was developed using the following platform:
 2. Performance metrics gathered on NVIDIA H100 GPU and 80GB Intel Xeon Gold 6136 CPU
 
 ### 2. Software Platform
--OS: Ubuntu 20.04.5
--CUDA: nvcc-11.8
--CUDA driver: 550.90.07
--C/C++: gcc-9.4.0
--Python: Python-3.8.10
-   -PyTorch: 
+*OS: Ubuntu 20.04.5
+*CUDA: nvcc-11.8
+*CUDA driver: 550.90.07
+*C/C++: gcc-9.4.0
+*Python: Python-3.8.10
+  *PyTorch: 
    
 ### 3. Dataset
-Input datasets are from open sources, and can be found at [!this link](https://drive.google.com/drive/folders/1VIeTu6O_yIVv1qkEpi-qSUaYuhhC4ovK?usp=sharing) . Due to some of the compilation process still in progress of transitioning to fully open source, some precompiled graph data format is also included, for now.
+Input datasets are from open sources, and can be found at [this link](https://drive.google.com/drive/folders/1VIeTu6O_yIVv1qkEpi-qSUaYuhhC4ovK?usp=sharing) . Due to some of the compilation process still in progress of transitioning to fully open source, some precompiled graph data format is also included, for now.
 
 ## Trial Run
 
