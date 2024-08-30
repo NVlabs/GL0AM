@@ -41,7 +41,7 @@ GL0AM was developed using the following platform:
 Input datasets are from open sources, and can be found at [this link](https://drive.google.com/drive/folders/1VIeTu6O_yIVv1qkEpi-qSUaYuhhC4ovK?usp=sharing) . Due to some of the compilation process still in progress of transitioning to fully open source, some precompiled graph data format is also included, for now.
 
 ## Trial Run
-### 1. Convert Python lilmatrix graph to DGL graph
+### 1. Convert precompiled Python lilmatrix graph to DGL graph
 ```
 python3 GL0AM.generateGraph.py --block qadd_pipe1000 --graphPrecompile qadd_pipe1000_GraphPrecompile.pkl.gz
 python3 GL0AM.splitLargeFOs.py --combo_graph qadd_pipe1000_fullSDF_DGLGraph --target_combo_graph qadd_pipe1000_combo_DGLGraph
