@@ -25,8 +25,15 @@ GL0AM was developed using the following platform:
   * CUDA: nvcc-11.8
   * CUDA driver: 550.90.07
   * C/C++: gcc-9.4.0
-  * Python: Python-3.8.10
-    * PyTorch: 
+  * Python: Python-3.8.10, with the following packages:
+    * PyTorch: 2.2.0+cu121
+    * DGL: 2.0.0+cu118
+    * NumPy: 1.22.2
+    * Networkx: 2.6.3
+    * SciPy: 1.10.1
+    * CuPy: 11.0.0b2 (https://github.com/leofang/cupy)
+  We used a docker container to manage our software platform, an example installation script can be found in [install/packages.sh](install/packages.sh)
+
    
 ### 3. Dataset
 Input datasets are from open sources, and can be found at [this link](https://drive.google.com/drive/folders/1VIeTu6O_yIVv1qkEpi-qSUaYuhhC4ovK?usp=sharing) . Due to some of the compilation process still in progress of transitioning to fully open source, some precompiled graph data format is also included, for now.
