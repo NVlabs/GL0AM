@@ -10,12 +10,27 @@ GL0AM is a delay annotated, GPU accelerated gate-level logic simulator. It simul
 <img src="images/GL0AM_ToolFlow4.svg" width="600"/>
 </p>
 
+We used proprietary tools to compile verilog netlists, SDF delay files, and input waveforms to graph and array format, so for now, some of the simulation compilation process is still in progress of transitioning to fully open source. Updates to this should arrive in the future.
+
 ## Prerequisites, packages, installation, and dataset
 
 GL0AM was developed using the following platform:
 
-### Hardware Platform
-Developed on NVIDIA GV100 GPU and Intel Xeon Platinum 8174 CPU, performance metrics gathered on NVIDIA H100 GPU and 80GB Intel Xeon Gold 6136 CPU
-2. prerequisites, packages, dataset
-3. tutorial/trial run
-4. results, future work.
+### 1. Hardware Platform
+1. Developed on NVIDIA GV100 GPU and Intel Xeon Platinum 8174 CPU
+2. Performance metrics gathered on NVIDIA H100 GPU and 80GB Intel Xeon Gold 6136 CPU
+
+### 2. Software Platform
+-OS: Ubuntu 20.04.5
+-CUDA: nvcc-11.8
+-CUDA driver: 550.90.07
+-C/C++: gcc-9.4.0
+-Python: Python-3.8.10
+   -PyTorch: 
+   
+### 3. Dataset
+Input datasets are from open sources, and can be found at [!this link](https://drive.google.com/drive/folders/1VIeTu6O_yIVv1qkEpi-qSUaYuhhC4ovK?usp=sharing) . Due to some of the compilation process still in progress of transitioning to fully open source, some precompiled graph data format is also included, for now.
+
+## Trial Run
+
+
