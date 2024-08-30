@@ -17,8 +17,8 @@ We used proprietary tools to compile verilog netlists, SDF delay files, and inpu
 GL0AM was developed using the following platform:
 
 ### 1. Hardware Platform
-1. Developed on NVIDIA GV100 GPU and Intel Xeon Platinum 8174 CPU
-2. Performance metrics gathered on NVIDIA H100 GPU and 80GB Intel Xeon Gold 6136 CPU
+  * Developed on NVIDIA GV100 GPU and Intel Xeon Platinum 8174 CPU
+  * Performance metrics gathered on NVIDIA H100 GPU and 80GB Intel Xeon Gold 6136 CPU
 
 ### 2. Software Platform
   * OS: Ubuntu 20.04.5
