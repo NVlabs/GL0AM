@@ -10,7 +10,12 @@ GL0AM is a delay annotated, GPU accelerated gate-level logic simulator. It simul
 <img src="images/GL0AM_ToolFlow4.svg" width="600"/>
 </p>
 
-1. intro, paper link, flow chart
+## Prerequisites, packages, installation, and dataset
+
+GL0AM was developed using the following platform:
+
+### Hardware Platform
+Developed on NVIDIA GV100 GPU and Intel Xeon Platinum 8174 CPU, performance metrics gathered on NVIDIA H100 GPU and 80GB Intel Xeon Gold 6136 CPU
 2. prerequisites, packages, dataset
 3. tutorial/trial run
 4. results, future work.
