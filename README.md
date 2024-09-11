@@ -33,6 +33,12 @@ GL0AM was developed using the following platform:
     * Networkx: 2.6.3
     * SciPy: 1.10.1
     * CuPy: 11.0.0b2 (https://github.com/leofang/cupy)
+    * Scikit-learn: 0.24.2
+    * Pandas: 1.5.2
+    * librosa: 0.9.2
+    * Jupyter-notebook: 7.4.8
+    * Pillow: 9.2.0
+    * xgboost: 1.6.2
   
   We used a docker container to manage our software platform, an example installation script can be found in [install/packages.sh](install/packages.sh). Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt).
 
