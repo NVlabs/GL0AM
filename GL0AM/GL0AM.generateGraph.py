@@ -1,3 +1,12 @@
+##############################################################################
+# Copyright (c) 2024, NVIDIA Corporation. All rights reserved.
+#
+# This work is made available under the Nvidia Source Code License-NC.
+# To view a copy of this license, visit
+# https://github.com/NVlabs/GL0AM/blob/main/LICENSE
+#
+##############################################################################
+
 import torch as th
 import dgl
 from dgl import DGLGraph
