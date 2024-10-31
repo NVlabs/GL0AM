@@ -1,7 +1,7 @@
 ##############################################################################
 # Copyright (c) 2024, NVIDIA Corporation. All rights reserved.
 #
-# This work is made available under the Nvidia Source Code License-NC.
+# This work is made available under the "NVIDIA License".
 # To view a copy of this license, visit
 # https://github.com/NVlabs/GL0AM/blob/main/LICENSE
 #
