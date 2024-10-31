@@ -1,37 +1,34 @@
-Copyright (c) 2024, NVIDIA Corporation. All rights reserved.
-
-
-Nvidia Source Code License-NC
-1. Definitions
-
-“Licensor” means any person or entity that distributes its Work.
-“Work” means (a) the original work of authorship made available under this license, which may include software, documentation, or other files, and (b) any additions to or derivative works  thereof  that are made available under this license.
-The terms “reproduce,” “reproduction,” “derivative works,” and “distribution” have the meaning as provided under U.S. copyright law; provided, however, that for the purposes of this license, derivative works shall not include works that remain separable from, or merely link (or bind by name) to the interfaces of, the Work.
-Works are “made available” under this license by including in or with the Work either (a) a copyright notice referencing the applicability of this license to the Work, or (b) a copy of this license.
-
-2. License Grant
-
-2.1 Copyright Grant. Subject to the terms and conditions of this license, each Licensor grants to you a perpetual, worldwide, non-exclusive, royalty-free, copyright license to use, reproduce, prepare derivative works of, publicly display, publicly perform, sublicense and distribute its Work and any resulting derivative works in any form.
-
-3. Limitations
-
-3.1 Redistribution. You may reproduce or distribute the Work only if (a) you do so under this license, (b) you include a complete copy of this license with your distribution, and (c) you retain without modification any copyright, patent, trademark, or attribution notices that are present in the Work.
-
-3.2 Derivative Works. You may specify that additional or different terms apply to the use, reproduction, and distribution of your derivative works of the Work (“Your Terms”) only if (a) Your Terms provide that the use limitation in Section 3.3 applies to your derivative works, and (b) you identify the specific derivative works that are subject to Your Terms. Notwithstanding Your Terms, this license (including the redistribution requirements in Section 3.1) will continue to apply to the Work itself.
-
-3.3 Use Limitation. The Work and any derivative works thereof only may be used or intended for use non-commercially. Notwithstanding the foregoing, NVIDIA Corporation and its affiliates may use the Work and any derivative works commercially. As used herein, “non-commercially” means for research or evaluation purposes only.
-
-3.4 Patent Claims. If you bring or threaten to bring a patent claim against any Licensor (including any claim, cross-claim or counterclaim in a lawsuit) to enforce any patents that you allege are infringed by any Work, then your rights under this license from such Licensor (including the grant in Section 2.1) will terminate immediately.
-
-3.5 Trademarks. This license does not grant any rights to use any Licensor’s or its affiliates’ names, logos, or trademarks, except as necessary to reproduce the notices described in this license.
-
-3.6 Termination. If you violate any term of this license, then your rights under this license (including the grant in Section 2.1) will terminate immediately.
-
-4. Disclaimer of Warranty.
-
-THE WORK IS PROVIDED “AS IS” WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WARRANTIES OR CONDITIONS OF 
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE OR NON-INFRINGEMENT. YOU BEAR THE RISK OF UNDERTAKING ANY ACTIVITIES UNDER THIS LICENSE. 
-
-5. Limitation of Liability.
-
-EXCEPT AS PROHIBITED BY APPLICABLE LAW, IN NO EVENT AND UNDER NO LEGAL THEORY, WHETHER IN TORT (INCLUDING NEGLIGENCE), CONTRACT, OR OTHERWISE SHALL ANY LICENSOR BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY DIRECT, INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES ARISING OUT OF OR RELATED TO THIS LICENSE, THE USE OR INABILITY TO USE THE WORK (INCLUDING BUT NOT LIMITED TO LOSS OF GOODWILL, BUSINESS INTERRUPTION, LOST PROFITS OR DATA, COMPUTER FAILURE OR MALFUNCTION, OR ANY OTHER DAMAGES OR LOSSES), EVEN IF THE LICENSOR HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+NVIDIA License
+By exercising the rights granted hereunder, You accept and agree to be bound by these terms and conditions. You are granted the rights hereunder in consideration of Your agreement to these terms and conditions. If You do not agree to these terms and conditions, do not download or use the GL0AM dataset.
+If You are agreeing to these terms and conditions on behalf of a legal entity, You represent that You have the legal authority to bind the legal entity to these terms and conditions.
+In consideration of the mutual covenants contained herein, You agree as follows:
+1. DEFINITIONS.
+“Derivative Work” shall mean any work that is based on (or derived from) any portion of the  GL0AM dataset. For the purposes of this License, Derivative Works shall not include works that remain separable from, or merely link (or bind by name) to the interfaces of, any portion of the GL0AM dataset and Derivative Works thereof.
+“NVDLA” means NVIDIA’s Deep Learning Accelerator, a hardware design that accelerates inferencing in System-on-a-Chip designs.
+“NVDLA Patents” shall mean patents that are necessary to practice the GL0AM dataset and any Derivative Works.
+“NVDLA Patent Rights” shall mean the right to make, have made, use, sell, offer for sale, and import patents that are necessary to practice the GL0AM dataset and any Derivative Works.
+“Other NVDLA Rights” includes copyright, design right (whether registered or unregistered), semiconductor topography (mask work) rights, and database rights to the GL0AM dataset and any Derivative Work. For the avoidance of doubt, Other NVDLA Rights does not include patents or trademarks.
+“License” and “Agreement” shall mean the terms and conditions for use, reproduction, and distribution as set forth in this document.
+“You” (or “Your”) shall mean an individual or Legal Entity agreeing to the terms and conditions of this License.
+2. LICENSE TO NVDLA PATENTS.
+Subject to the terms and conditions of this License, NVIDIA hereby grant to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable (except as stated in this section) license under the NVDLA Patents to make, have made, use, offer to sell, sell, import, and otherwise transfer the GL0AM dataset for research or evaluation purposes only.
+If You institute patent litigation against any entity (including a cross-claim or counterclaim in a lawsuit) alleging that any portion of the GL0AM dataset directly or contributorily infringes any patent, then any patent licenses granted to You under this License and Agreement shall terminate as of the date such litigation is filed.
+3. LICENSE TO OTHER NVDLA RIGHTS.
+Subject to the terms and conditions of this License, NVIDIA hereby grant to You a perpetual, worldwide, non-exclusive, no-charge, royalty-free, irrevocable license under the Other NVDLA Rights to reproduce, prepare Derivative Works of, publicly display, publicly perform, sublicense, and distribute the NVDLA Specification and such Derivative Works, and to exploit any mask works included in the GL0AM dataset or such Derivative Works for research or evaluation purposes, only.
+4. REDISTRIBUTION.
+You may reproduce and distribute copies of the GL0AM dataset or Derivative Works thereof in any medium, with or without modifications, provided that You meet the following conditions:
+1.	You must give any other recipients of the GL0AM dataset or Derivative Works a copy of this License and Agreement; and
+2.	You must cause any modified files or other portions of the GL0AM dataset to carry prominent notices stating that You changed such files or other portions; and
+3.	You must retain, in any Derivative Works that You distribute, all notices, including copyright, patent, trademark, and attribution notices, from the GL0AM dataset, excluding those notices that do not pertain to any part of the Derivative Works; and
+4.	You may add Your own copyright statement to Your modifications and may provide additional or different license terms and conditions for use, reproduction, or distribution of Your modifications, or for any such Derivative Works as a whole, provided Your use, reproduction, and distribution of the GL0AM dataset otherwise complies with the conditions stated in this License and Agreement.
+5. TRADEMARKS.
+This License does not grant permission to use the trade names, trademarks, service marks, or product names (“Marks”) of NVIDIA, except as required for reasonable and customary use in describing the origin of the GL0AM dataset. 
+6. NO IMPLIED RIGHTS.
+Except for the licenses expressly set forth herein, no other licenses are granted hereunder whether by implication, estoppel or otherwise. This License and Agreement provides you with no implied rights or licenses to the intellectual property of NVIDIA.
+7. DISCLAIMER OF WARRANTY.
+Unless required by applicable law or agreed to in writing, NVIDIA provides the GL0AM dataset  on an “AS IS” BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied, including, without limitation, any warranties or conditions of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A PARTICULAR PURPOSE.
+You are solely responsible for determining the appropriateness of Your use of NVDLA, the GL0AM dataset, and You assume all associated risks, including but not limited to the risks and costs of damage to or loss of data, programs or equipment, and unavailability or interruption of operations. You agree to comply with all regulations and safety standards applicable to Your use of NVDLA and the GL0AM dataset. You acknowledge that the NVDLA and GL0AM dataset provided to You under this Agreement are not intended to be used, without additional safeguards and/or process technology, to control or operate machines that can lead to personal injury, death, or severe physical or environmental damage, and if You make, use, or sell such machines, You agree to assume all liability therefor and will comply with all applicable safety-related laws, regulations, and best industry practices.
+8. LIMITATION OF LIABILITY.
+In no event and under no legal theory, whether in tort (including negligence), contract, or otherwise, shall NVIDIA be liable to You for damages, including any direct, indirect, special, incidental, or consequential damages of any character arising as a result of this License and Agreement (including but not limited to damages for loss of goodwill, work stoppage, computer failure or malfunction, or any and all other damages or losses).
+9. WAIVER AND INDEMNITY.
+You agree to waive any and all claims against NVIDIA arising from Your use of NVDLA or the GL0AM dataset. If Your use of the NVDLA, the GL0AM dataset, or any portion thereof, results in any liabilities, demands, damages, expenses or losses arising from such use, including any damages from products based on, or resulting from, Your use of NVDLA or the GL0AM dataset licensed under this Agreement, You shall indemnify and hold harmless NVIDIA to the extent permitted by law. In addition, You agree to defend, indemnify, and hold NVIDIA harmless from any claim brought by a third party alleging any defect in the design, manufacture, or any Product which You make, have made, sell, or distribute pursuant to this Agreement. Your sole remedy for any such matter shall be the immediate, unilateral termination of this Agreement.
