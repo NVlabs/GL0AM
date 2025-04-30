@@ -1,16 +1,8 @@
-# GL0AM
+# MLCAD2025_Contest_Sim
 
 ## Introduction
 
-
-GL0AM is a delay annotated, GPU accelerated gate-level logic simulator. It simulates in 4 value, and covers most simulation scenarios and SDF delay annotation involving single frequency clock stimuli and designs. At the end of simulation, a simple debug environment is also included. It operates by first performing a GPU accelerated 0-delay simulation on the design-under-test (DUT) from primary port inputs in order to acquire register/SRAM/clock gate output waveforms, and then does a GPU accelerated parallel re-simulation to acquire the remaining combinational gate waveforms. To minimize the issues of memory locality and synchronization overheads that often plague GPU accelerated logic simulation, we use a partitioning strategy to break top level netlists into smaller independent groups of logic cones that map to a single GPU thread block--thus using only the fastest block synchronization.
-
-<p align="center">
-  <img src="images/GL0AM_ToolFlow3.svg" width="600"/>
-<img src="images/GL0AM_ToolFlow4.svg" width="600"/>
-</p>
-
-We used proprietary tools to compile verilog netlists, SDF delay files, and input waveforms to graph and array format, so for now, some of the simulation compilation process is still in progress of transitioning to fully open source. Updates to this should arrive in the future.
+This is a branch of GL0AM that is serving the purpose of a logic cone simulator/verifier for the 2025 MLCAD Design Contest: https://asu-vda-lab.github.io/MLCAD25-Contest/ . 
 
 ## Prerequisites, packages, installation, and dataset
 
