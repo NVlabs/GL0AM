@@ -1,0 +1,31 @@
+[package]
+name = "stdlibparse"
+version = "0.1.0"
+edition = "2024"
+description = "Parse a std cell library .v"
+license = "Apache 2.0"
+
+
+[dependencies]
+cachedhash = "0.2.0"
+clap = { version = "4.5.15", features = ["derive"] }
+clilog = { version = "0.2.5", path = "../eda-infra-rs/clilog" }
+compact_str = "0.7.1"
+indexmap = "2.4.0"
+itertools = "0.13.0"
+netlistdb = { version = "0.4.6", path = "../eda-infra-rs/netlistdb" }
+rand = "0.8.5"
+rand_chacha = "0.3.1"
+rayon = "1.10.0"
+serde = { version = "1.0.208", features = ["derive"] }
+serde_bare = "0.5.0"
+sverilogparse = { version = "0.4.2", path = "../eda-infra-rs/sverilogparse" }
+tempdir = "0.3.7"
+ulib = { version = "0.3.13", path = "../eda-infra-rs/ulib" }
+vcd-ng = { version = "0.2.0", path = "../eda-infra-rs/vcd-ng" }
+lazy_static = "1.4.0"
+nom = "7.1.3"
+regex = "1.6.0"
+
+[build-dependencies]
+ucc = { version = "0.2.5", path = "../eda-infra-rs/ucc" }
