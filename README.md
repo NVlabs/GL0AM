@@ -2,11 +2,11 @@
 
 ## Introduction
 
-This is a branch of GL0AM that is serving the purpose of a logic cone simulator/verifier for the 2025 MLCAD Design Contest: https://asu-vda-lab.github.io/MLCAD25-Contest/ . 
+This is a branch of GL0AM that is serving the purpose of a logic cone simulator/verifier for the 2025 MLCAD Design Contest: https://asu-vda-lab.github.io/MLCAD25-Contest/ . As such, we can view it as a 'subset' form of GL0AM that _only_ simulates the combinational logic cones for a golden netlist, vs. a resynthesized netlist. The stimuli for the logic cones are created randomly, and at the end of their respective simulations, the results for the logic cone endpoints for both netlists are compared. 
 
 ## Prerequisites, packages, installation, and dataset
 
-GL0AM was developed using the following platform:
+We will need the following to use the GPU simulator:
 
 ### 1. Hardware Platform
   * Developed on NVIDIA GV100 GPU and Intel Xeon Platinum 8174 CPU
