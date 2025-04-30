@@ -32,9 +32,15 @@ We will need the following to use the GPU simulator:
     * Pillow: 9.2.0
     * xgboost: 1.6.2
   
-  We used a docker container to manage our software platform, an example installation script can be found in [install/packages.sh](install/packages.sh). Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt).
+Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt).
 
 ## Setup and Trial Run
+### 0. Install Rustc and Python packages
+```
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+#and follow prompt, can check installation correct if you can run 'rustc -V'
+```
+
 ### 1. Convert precompiled Python lilmatrix graph to DGL graph
 ```
 python3 GL0AM.generateGraph.py --block qadd_pipe1000 --graphPrecompile qadd_pipe1000_GraphPrecompile.pkl.gz
