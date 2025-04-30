@@ -4,19 +4,19 @@
 
 This is a branch of GL0AM that is serving the purpose of a logic cone simulator/verifier for the 2025 MLCAD Design Contest: https://asu-vda-lab.github.io/MLCAD25-Contest/ . As such, we can view it as a 'subset' form of GL0AM that _only_ simulates the combinational logic cones for a golden netlist, vs. a resynthesized netlist. The stimuli for the logic cones are created randomly, and at the end of their respective simulations, the results for the logic cone endpoints for both netlists are compared. 
 
-## Prerequisites, packages, installation, and dataset
+## Prerequisites, packages, installation
 
 We will need the following to use the GPU simulator:
 
 ### 1. Hardware Platform
-  * Developed on NVIDIA GV100 GPU and Intel Xeon Platinum 8174 CPU
-  * Performance metrics gathered on NVIDIA H100 GPU and 80GB Intel Xeon Gold 6136 CPU
+  * Developed on NVIDIA GV100 GPU and Intel Xeon Platinum 8174 CPU. (But, most any GPUs should work)
 
 ### 2. Software Platform
   * OS: Ubuntu 20.04.5
   * CUDA: nvcc-11.8
   * CUDA driver: 550.90.07
   * C/C++: gcc-9.4.0
+  * Rust: 1.85.1 (though 1.82 and/or above should work)
   * hMetis: 1.5
   * Python: Python-3.8.10, with the following packages:
     * PyTorch: 2.2.0+cu121
@@ -34,11 +34,7 @@ We will need the following to use the GPU simulator:
   
   We used a docker container to manage our software platform, an example installation script can be found in [install/packages.sh](install/packages.sh). Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt).
 
-   
-### 3. Dataset
-Input datasets are from open sources, and can be found at [this link](https://drive.google.com/drive/folders/1VIeTu6O_yIVv1qkEpi-qSUaYuhhC4ovK?usp=sharing) . Due to some of the compilation process still in progress of transitioning to fully open source, some precompiled graph data format is also included, for now.
-
-## Trial Run
+## Setup and Trial Run
 ### 1. Convert precompiled Python lilmatrix graph to DGL graph
 ```
 python3 GL0AM.generateGraph.py --block qadd_pipe1000 --graphPrecompile qadd_pipe1000_GraphPrecompile.pkl.gz
