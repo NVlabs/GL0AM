@@ -40,6 +40,9 @@ Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 #and follow prompt, can check installation correct if you can run 'rustc -V'
 ```
+```
+We used a docker container to manage our software platform, an example installation script can be found in [packages.sh](packages.sh)
+```
 
 ### 1. Convert precompiled Python lilmatrix graph to DGL graph
 ```
