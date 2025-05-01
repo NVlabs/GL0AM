@@ -48,26 +48,21 @@ cargo build
 ```
 We used a docker container to manage our software platform, an example installation script can be found in [packages.sh](packages.sh) . In any case, successful installation may be subject to the OS, but the key is that [PyTorch](https://pytorch.org/), a GPU enabled version of [DGL](https://www.dgl.ai/pages/start.html), and [CuPy](https://cupy.dev/) should be installed. 
 
-### 1. Convert precompiled Python lilmatrix graph to DGL graph
+### 1. Convert Verilog Netlist to Combinational Logic Cones in CSR format
+There are a few sample netlists in <TOP_DIR>/build_gatspi_graph/tests for this trial.
 ```
-python3 GL0AM.generateGraph.py --block qadd_pipe1000 --graphPrecompile qadd_pipe1000_GraphPrecompile.pkl.gz
-python3 GL0AM.splitLargeFOs.py --combo_graph qadd_pipe1000_fullSDF_DGLGraph --target_combo_graph qadd_pipe1000_combo_DGLGraph
+cargo run --bin build_gatspi_graph ./build_gatspi_graph/tests/adder.v ./gatspi/adder.pkl
+cargo run --bin build_gatspi_graph ./build_gatspi_graph/tests/adder_altCorrect.v ./gatspi/adder_altCorrect.pkl
+cargo run --bin build_gatspi_graph ./build_gatspi_graph/tests/adder_altIncorrect.v ./gatspi/adder_altIncorrect.pkl
+#"cargo run --bin build_gatspi_graph" will print the usage
 ```
-### 2. Partition the combinational logic graph
+### 2. Compile the CSR Graphs to Simulation Graphs, Simulate Golden and Resynthesized Logic Cones, Compare the Simulation Results
 ```
-python3 GL0AM.partitioningSetup.py --block qadd_pipe1000 --graph4 qadd_pipe1000_combo_DGLGraph
-hmetis qadd_pipe1000.hgr 160 5 10 4 1 1 0 0
-python3 GL0AM.partitioningPostprocessing.py --block qadd_pipe1000 --graph2 qadd_pipe1000_update_DGLGraph \
---graph3 qadd_pipe1000_sram_DGLGraph --graph4 qadd_pipe1000_combo_DGLGraph --hMetisResults qadd_pipe1000.hgr.part.160 --partitions 160 \
---graphPrecompile qadd_pipe1000_GraphPrecompile.pkl.gz --graph qadd_pipe1000_fullSDF_DGLGraph
-```
-### 3. Compile input waveforms, compile graph information to simulation array information, run GL0AM simulation, output 4-value SAIF file.
-```
-python3 GL0AM.runSim.py --block qadd_pipe1000 --instance_name whatever  --testname random \
---cycles 3000 --period 1000 --input_trace_file qadd_pipe1000.random.waveforms_part0.gz \
---graphPrecompile qadd_pipe1000_GraphPrecompile.pkl.gz --graph qadd_pipe1000_fullSDF_DGLGraph \
---graph2 qadd_pipe1000_update_DGLGraph --graph3 qadd_pipe1000_sram_DGLGraph --graph4 qadd_pipe1000_combo_DGLGraph \
---timescale 1 --pin_net_file qadd_pipe1000_GraphPrecompile.CellNetTranslation --num_splits 32 --duration 3000000 --clk clk \
---first_edge 500 --num_of_sub_chunks 1 --zeroDelayReportSignals UI_0__add0_GL0AMs_a_pipe[31:0] UI_0__add0_GL0AMs_b_pipe[31:0] c[31:0] \
---clkTreeFile qadd_pipe1000_GraphPrecompile.clkTreePins --partitionsFile qadd_pipe1000.160.partitions
+cd <TOP_DIR>/gatspi
+python3 runGatspi.py --top_name adder --graph0FilePath ./adder.pkl --graph1FilePath ./adder_altCorrect.pkl --dumpDGLGraph 1 --createStdCellLibLUT 1
+python3 runGatspi.py --top_name adder --graph0FilePath ./adder.pkl --graph1FilePath ./adder_altIncorrect.pkl --dumpDGLGraph 1
+#"python3 runGatspi.py --help" will print the usage.
+#The results of the simulation comparison is printed to STDOUT
+#Generally, we'll want --dumpDGLGraph 1 if either netlist changes
+#Generally, only need to run with --createStdCellLibLUT 1 once
 ```
