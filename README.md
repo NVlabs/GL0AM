@@ -40,7 +40,7 @@ Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt)
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 #and follow prompt, can check installation correct if you can run 'rustc -V'
 ```
-We used a docker container to manage our software platform, an example installation script can be found in [packages.sh](packages.sh) . In any case, successful installation may be subject to the OS, but the key is that [PyTorch](https://pytorch.org/), a GPU enabled version of [DGL](https://www.dgl.ai/pages/start.html), and [CuPy]([CuPy](https://cupy.dev/)) should be installed. 
+We used a docker container to manage our software platform, an example installation script can be found in [packages.sh](packages.sh) . In any case, successful installation may be subject to the OS, but the key is that [PyTorch](https://pytorch.org/), a GPU enabled version of [DGL](https://www.dgl.ai/pages/start.html), and [CuPy](https://cupy.dev/) should be installed. 
 
 ### 1. Convert precompiled Python lilmatrix graph to DGL graph
 ```
