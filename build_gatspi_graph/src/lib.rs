@@ -91,11 +91,6 @@ impl GATSPIGraph {
     these_opins.splice(0..0, legit_top_ports.clone()); 
     let these_opins2 = Vec::from(these_opins);
     let these_nets : Vec<usize> = these_opins2.clone().into_iter().map(|pin| db.pin2net[pin]).collect();
-    let num_of_load_input_pins: Vec<_> = these_nets.clone().into_iter().map(|net| db.net2pin.items[db.net2pin.start[net]..db.net2pin.start[net+1]].into_iter().filter(
-                                         |&pin| (db.pindirect[*pin] == Direction::I) && (db.pin2cell[*pin] != 0) ).collect::<Vec<_>>().len()).collect();
-    let num_of_load_cells: Vec<_> = these_nets.clone().into_iter().map(|net| db.net2pin.items[db.net2pin.start[net]..db.net2pin.start[net+1]].into_iter().filter(
-                                         |&pin| (db.pindirect[*pin] == Direction::I) && (db.pin2cell[*pin] != 0) ).map(|pin| db.pin2cell[*pin]).unique().collect::<Vec<_>>().len()).collect();
-    assert!(num_of_load_input_pins==num_of_load_cells, "There is a driver that drives multiple input pins of the same load cell, which is currently not supported!");
     let mut these_number_of_pins : Vec<usize> = these_nets.clone().into_iter().map(|net| db.net2pin.items[db.net2pin.start[net]..db.net2pin.start[net+1]].into_iter().filter(
                                          |&pin| (db.pindirect[*pin] == Direction::I) && (db.pin2cell[*pin] != 0) ).map( |&pin|  db.cell2noutputs[db.pin2cell[pin]] ).sum()
                                         ).scan(0, |acc, x : usize| { *acc +=x; Some(*acc) }).collect();
