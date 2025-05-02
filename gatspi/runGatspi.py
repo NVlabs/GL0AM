@@ -311,17 +311,6 @@ for c in range(simLoops):
 temp_delta = timer() - temp_start
 print("Golden simulation for " + str(cycles32) + ' cycles done in ' + f"{temp_delta:.3f}" + ' seconds')
 
-for c in range(PARALLEL_CYCLES):
- A=[] ; B=[]; C=[] ; printA='' ; printB='' ;  printC='' ; 
- for i in range(31,-1,-1):
-  aName = 'a' + '[' + str(i) + ']' ; bName = 'b' + '[' + str(i) + ']' ; cName = 'c' + '[' + str(i) + ']' ; 
-  bitIDa = port2id0[aName] ;  bitIDb = port2id0[bName] ;bitIDc = port2id0[cName] ;
-  A.append(str(int(currentLogicValue[bitIDa,c]))) ; B.append(str(int(currentLogicValue[bitIDb,c]))) ; C.append(str(int(currentLogicValue[bitIDc,c]))) ; 
- A = "".join(A) ; B = "".join(B) ; C = "".join(C) ; 
- printA += 'a' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(A, base=2)))
- printB += 'b' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(B, base=2)))
- printC += 'c' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(C, base=2)))
- print(printA + ' ' + printB + ' : ' + printC) 
 
 print("start edited simulation graph setup...")
 temp_start = timer()
@@ -360,18 +349,6 @@ for c in range(simLoops):
  outputsTotal1[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES] = currentLogicValue[outputs1]
 temp_delta = timer() - temp_start
 print("Edited simulation for " + str(cycles32) + ' cycles done in ' + f"{temp_delta:.3f}" + ' seconds')
-
-for c in range(PARALLEL_CYCLES):
- A=[] ; B=[]; C=[] ; printA='' ; printB='' ;  printC='' ; 
- for i in range(31,-1,-1):
-  aName = 'a' + '[' + str(i) + ']' ; bName = 'b' + '[' + str(i) + ']' ; cName = 'c' + '[' + str(i) + ']' ; 
-  bitIDa = port2id1[aName] ;  bitIDb = port2id1[bName] ;bitIDc = port2id1[cName] ;
-  A.append(str(int(currentLogicValue[bitIDa,c]))) ; B.append(str(int(currentLogicValue[bitIDb,c]))) ; C.append(str(int(currentLogicValue[bitIDc,c]))) ; 
- A = "".join(A) ; B = "".join(B) ; C = "".join(C) ; 
- printA += 'a' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(A, base=2)))
- printB += 'b' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(B, base=2)))
- printC += 'c' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(C, base=2)))
- print(printA + ' ' + printB + ' : ' + printC) 
 
 print("start result compare...")
 temp_start = timer()
