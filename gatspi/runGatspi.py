@@ -16,7 +16,6 @@ import math
 from datetime import datetime
 from timeit import default_timer as timer
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--top_name', type=str, help = 'top module name')
 parser.add_argument('--graph0FilePath', type=str, help='raw csr graph file path, or stored DGL graph file path for golden netlist')
@@ -26,9 +25,9 @@ Should be true and ran once when creating the DGL graph from raw CSR graph, from
 parser.add_argument('--createStdCellLibLUT', type=bool, default=False, help='compile the std cell library truth tables or not. should be run once for each new technology')
 parser.add_argument('--cycles', type=int, default=50000, help='target verification cycles to run')
 parser.add_argument('--parallel_sim_cycles', type=int, default=32, choices=[1,2,4,8,16,32,64,128,256], help='# of cycles to be simulated in parallel on GPU')
-args = parser.parse_args()
-#args = parser.parse_args(['--top_name', 'adder', '--graph0FilePath', '../results/adder_altCorrect.pkl', '--graph1FilePath', \
-#'../results/adder_altIncorrect.pkl', '--dumpDGLGraph', '1'])
+#args = parser.parse_args()
+args = parser.parse_args(['--top_name', 'adder', '--graph0FilePath', './adder.pkl', '--graph1FilePath', \
+'./adder.pkl', '--dumpDGLGraph', '1'])
 
 #data loading, builds the DGL graph from csr raw graph
 def build_graph(pkl):
@@ -209,7 +208,6 @@ if args.createStdCellLibLUT:
 else:
  out_array, out_offset = th.load("MLCADDesignContest2025StdCellLibLUT")
 
-# +
 print("start golden simulation graph setup...")
 import cupy as cp
 temp_start = timer()
@@ -250,7 +248,6 @@ g0.ndata['celltype'][g0.ndata['celltype'] == 999] = 0
 g0.ndata['celloffsets'] = out_offset[g0.ndata['celltype'].type(th.int32)]
 out_array_GPU = cp.asarray(out_array)
 
-# +
 topo_nodes_cpu1 =  dgl.traversal.topological_nodes_generator(g1)
 inputNodes1 = topo_nodes_cpu1[0] ; 
 inputNodes1 = inputNodes1[ g1.out_degrees(inputNodes1) > 0 ]
@@ -281,17 +278,21 @@ for i in range(outputs0.shape[0]):
  thisID = int(outputs0[i]) ; thisNet = id2pinAndNet0[thisID-num_of_top_ports0][1] if thisID >= num_of_top_ports0 else id2port0[thisID] ; 
  alignedOutput = port2id1[thisNet] if thisNet in port2id1.keys() else net2id1[thisNet] ;
  outputs1[i] = alignedOutput
-# -
 
 exec(open('evalLogic.cupy').read())
 
 nodesPerStage=[]; driversPerGate=[] ; edgeOffsets=[] ; drivers =[]; celltypes = []; pinPositions=[]
 for logicStage in range(1,len(topo_nodes_cpu0)):
- theseNodes = topo_nodes_cpu0[logicStage]; nodesPerStage.append(cp.asarray(theseNodes.type(th.int32)));
- celltypes.append(cp.asarray(g0.ndata['celloffsets'][theseNodes].type(th.int32))); 
- in_degs = g0.in_degrees(theseNodes) ; driversPerGate.append(cp.asarray(in_degs.type(th.uint8)));
+ theseNodes = topo_nodes_cpu0[logicStage]; 
+ theseDrivers, dummy =  g0.in_edges( theseNodes ) ; 
+ #this roundabout stuff is done to process the case of one driver driving multiple input pins of the same cell
+ toTuple = [(int(theseDrivers[i]), int(dummy[i])) for i in range(theseDrivers.size()[0])] ; toTensor = th.LongTensor(list(set(toTuple)))
+ dummy2, shuffleIndex = toTensor[:,1].sort() ; theseDrivers2 = toTensor[:,0][shuffleIndex] ; theseNodes2 = th.unique(dummy2) ;
+ nodesPerStage.append(cp.asarray(theseNodes2.type(th.int32)));
+ celltypes.append(cp.asarray(g0.ndata['celloffsets'][theseNodes2].type(th.int32)));
+ in_degs = g0.in_degrees(theseNodes2) ; driversPerGate.append(cp.asarray(in_degs.type(th.uint8)));
  theseEdgeOffsets = th.roll(th.cumsum(in_degs,  dim=0), 1, 0) ; theseEdgeOffsets[0] = 0 ; edgeOffsets.append(cp.asarray(theseEdgeOffsets));
- theseDrivers, dummy =  g0.in_edges( theseNodes ) ; edgeIDs = g0.edge_ids(theseDrivers, dummy) ; drivers.append(cp.asarray(theseDrivers.type(th.int32)));
+ actualDrivers, notUsed, edgeIDs = g0.edge_ids(theseDrivers2, dummy2, return_uv=True) ; drivers.append(cp.asarray(actualDrivers.type(th.int32)));
  pinPositions.append(cp.asarray(g0.edata['x'][edgeIDs])) ; 
 temp_delta = timer() - temp_start
 print("Golden sim graph done in " + f"{temp_delta:.3f}" + ' seconds')
@@ -310,6 +311,18 @@ for c in range(simLoops):
 temp_delta = timer() - temp_start
 print("Golden simulation for " + str(cycles32) + ' cycles done in ' + f"{temp_delta:.3f}" + ' seconds')
 
+for c in range(PARALLEL_CYCLES):
+ A=[] ; B=[]; C=[] ; printA='' ; printB='' ;  printC='' ; 
+ for i in range(31,-1,-1):
+  aName = 'a' + '[' + str(i) + ']' ; bName = 'b' + '[' + str(i) + ']' ; cName = 'c' + '[' + str(i) + ']' ; 
+  bitIDa = port2id0[aName] ;  bitIDb = port2id0[bName] ;bitIDc = port2id0[cName] ;
+  A.append(str(int(currentLogicValue[bitIDa,c]))) ; B.append(str(int(currentLogicValue[bitIDb,c]))) ; C.append(str(int(currentLogicValue[bitIDc,c]))) ; 
+ A = "".join(A) ; B = "".join(B) ; C = "".join(C) ; 
+ printA += 'a' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(A, base=2)))
+ printB += 'b' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(B, base=2)))
+ printC += 'c' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(C, base=2)))
+ print(printA + ' ' + printB + ' : ' + printC) 
+
 print("start edited simulation graph setup...")
 temp_start = timer()
 mempool = cp.get_default_memory_pool()
@@ -318,11 +331,16 @@ currentLogicValue = cp.asarray(th.zeros( size=(g1.nodes().shape[0],PARALLEL_CYCL
 
 nodesPerStage=[]; driversPerGate=[] ; edgeOffsets=[] ; drivers =[]; celltypes = []; pinPositions=[]
 for logicStage in range(1,len(topo_nodes_cpu1)):
- theseNodes = topo_nodes_cpu1[logicStage]; nodesPerStage.append(cp.asarray(theseNodes.type(th.int32)));
- celltypes.append(cp.asarray(g1.ndata['celloffsets'][theseNodes].type(th.int32))); 
- in_degs = g1.in_degrees(theseNodes) ; driversPerGate.append(cp.asarray(in_degs.type(th.uint8)));
+ theseNodes = topo_nodes_cpu1[logicStage]; 
+ theseDrivers, dummy =  g1.in_edges( theseNodes ) ; 
+ #this roundabout stuff is done to process the case of one driver driving multiple input pins of the same cell
+ toTuple = [(int(theseDrivers[i]), int(dummy[i])) for i in range(theseDrivers.size()[0])] ; toTensor = th.LongTensor(list(set(toTuple)))
+ dummy2, shuffleIndex = toTensor[:,1].sort() ; theseDrivers2 = toTensor[:,0][shuffleIndex] ; theseNodes2 = th.unique(dummy2) ;
+ nodesPerStage.append(cp.asarray(theseNodes2.type(th.int32)));
+ celltypes.append(cp.asarray(g1.ndata['celloffsets'][theseNodes2].type(th.int32)));
+ in_degs = g1.in_degrees(theseNodes2) ; driversPerGate.append(cp.asarray(in_degs.type(th.uint8)));
  theseEdgeOffsets = th.roll(th.cumsum(in_degs,  dim=0), 1, 0) ; theseEdgeOffsets[0] = 0 ; edgeOffsets.append(cp.asarray(theseEdgeOffsets));
- theseDrivers, dummy =  g1.in_edges( theseNodes ) ; edgeIDs = g1.edge_ids(theseDrivers, dummy) ; drivers.append(cp.asarray(theseDrivers.type(th.int32)));
+ actualDrivers, notUsed, edgeIDs = g1.edge_ids(theseDrivers2, dummy2, return_uv=True) ; drivers.append(cp.asarray(actualDrivers.type(th.int32)));
  pinPositions.append(cp.asarray(g1.edata['x'][edgeIDs])) ; 
 mempool = cp.get_default_memory_pool()
 mempool.free_all_blocks()
@@ -342,6 +360,18 @@ for c in range(simLoops):
  outputsTotal1[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES] = currentLogicValue[outputs1]
 temp_delta = timer() - temp_start
 print("Edited simulation for " + str(cycles32) + ' cycles done in ' + f"{temp_delta:.3f}" + ' seconds')
+
+for c in range(PARALLEL_CYCLES):
+ A=[] ; B=[]; C=[] ; printA='' ; printB='' ;  printC='' ; 
+ for i in range(31,-1,-1):
+  aName = 'a' + '[' + str(i) + ']' ; bName = 'b' + '[' + str(i) + ']' ; cName = 'c' + '[' + str(i) + ']' ; 
+  bitIDa = port2id1[aName] ;  bitIDb = port2id1[bName] ;bitIDc = port2id1[cName] ;
+  A.append(str(int(currentLogicValue[bitIDa,c]))) ; B.append(str(int(currentLogicValue[bitIDb,c]))) ; C.append(str(int(currentLogicValue[bitIDc,c]))) ; 
+ A = "".join(A) ; B = "".join(B) ; C = "".join(C) ; 
+ printA += 'a' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(A, base=2)))
+ printB += 'b' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(B, base=2)))
+ printC += 'c' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(C, base=2)))
+ print(printA + ' ' + printB + ' : ' + printC) 
 
 print("start result compare...")
 temp_start = timer()
@@ -367,4 +397,3 @@ else:
 temp_delta = timer() - temp_start
 print("Golden vs Edited comparison done in " + f"{temp_delta:.3f}" + ' seconds')
 
-# ###### 
