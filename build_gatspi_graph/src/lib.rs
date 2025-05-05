@@ -31,7 +31,7 @@ pub struct GATSPIGraph {
 }
 
 lazy_static! {
-    static ref SEQ_REGEX: Regex = Regex::new(r".*(DFF|DHL|DLL|ICG|SDF).*").unwrap();
+    static ref SEQ_REGEX: Regex = Regex::new(r".*(DFF|DHL|DLL|ICG|SDF|sram_).*").unwrap();
 }
 
 
@@ -45,8 +45,8 @@ impl LeafPinProvider for StdCellPinDefs {
   ) -> Direction {
    if let true = SEQ_REGEX.is_match(macro_name.as_str()) {
     match pin_name.as_str() {
-     "GCLK" | "Q" | "QN" => Direction::O,
-     "D" | "SE" | "SI" | "CLK" | "RESETN" | "RESET" | "SETN" | "SET" | "ENA" => Direction::Unknown,
+     "GCLK" | "Q" | "QN" | "rd_out" => Direction::O,
+     "D" | "SE" | "SI" | "CLK" | "RESETN" | "RESET" | "SETN" | "SET" | "ENA" | "addr_in" | "ce_in" | "clk" | "wd_in" | "we_in" => Direction::Unknown,
      _ => { 
            use netlistdb::{GeneralPinName, HierName};
            panic!("Cannot recognize sequential pin type {}, please make sure the verilog netlist is synthesized from Contest tech lib.",
