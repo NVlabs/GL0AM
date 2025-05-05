@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 
 lazy_static! {
-    static ref SEQ_REGEX: Regex = Regex::new(r".*(DFF|DHL|DLL|ICG|SDF).*").unwrap();
+    static ref SEQ_REGEX: Regex = Regex::new(r".*(DFF|DHL|DLL|ICG|SDF|sram_).*").unwrap();
 }
 
 /// standard cell celltype numerical attributes, and cell pin type numerical attributes
