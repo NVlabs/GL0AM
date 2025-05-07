@@ -6,47 +6,32 @@ This is a branch of GL0AM that is serving the purpose of a logic cone simulator/
 
 ## Prerequisites, packages, installation
 
-We will need the following to use the GPU simulator:
+We used a [Dockerfile](Dockerfile) to build a docker for the environment to run this simulator. Since this simulator is tied to the [2025 MLCAD Design Contest](https://asu-vda-lab.github.io/MLCAD25-Contest/), the Dockerfile is very similar to the one for the design contest. For the most part, the following is needed:
 
 ### 1. Hardware Platform
   * Developed on NVIDIA GV100 GPU and Intel Xeon Platinum 8174 CPU. (But, most any GPUs should work)
 
 ### 2. Software Platform
   * OS: Ubuntu 20.04.5
-  * CUDA: nvcc-11.8
-  * CUDA driver: 550.90.07
-  * C/C++: gcc-9.4.0
+  * CUDA: nvcc-12.3
+  * CUDA driver: 550.90.07 or similar
   * Rust: 1.85.1 (though 1.82 and/or above should work)
-  * hMetis: 1.5
   * Python: Python-3.8.10, with the following packages:
     * PyTorch: 2.2.0+cu121
-    * DGL: 2.0.0+cu118
-    * NumPy: 1.22.2
-    * Networkx: 2.6.3
-    * SciPy: 1.10.1
-    * CuPy: 11.0.0b2 (https://github.com/leofang/cupy)
-    * Scikit-learn: 0.24.2
-    * Pandas: 1.5.2
-    * librosa: 0.9.2
-    * Jupyter-notebook: 7.4.8
-    * Pillow: 9.2.0
-    * xgboost: 1.6.2
+    * DGL: 1.2
+    * CuPy: 12.2.0 or similar
   
 Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt).
 
 ## Setup and Trial Run
-### 0. Install Rustc and Python packages
+### 0. Install Rustc and Python packages (if not using docker), Add a Git Submodule)
 ```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-#and follow prompt, can check installation correct if you can run 'rustc -V'
-#We also want to add a submodule to the repo:
 git submodule add  https://github.com/gzz2000/eda-infra-rs.git
 #build the rustc executable that translates Verilog into simulation graph
 cd <TOP_DIR>
 cargo build
 #if you see "Finished `dev` ..." then rustc portion is all set to go!
 ```
-We used a docker container to manage our software platform, an example installation script can be found in [packages.sh](packages.sh) . In any case, successful installation may be subject to the OS, but the key is that [PyTorch](https://pytorch.org/), a GPU enabled version of [DGL](https://www.dgl.ai/pages/start.html), and [CuPy](https://cupy.dev/) should be installed. 
 
 ### 1. Convert Verilog Netlist to Combinational Logic Cones in CSR format
 There are a few sample netlists in <TOP_DIR>/build_gatspi_graph/tests for this trial.
