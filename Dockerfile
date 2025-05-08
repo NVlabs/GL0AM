@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/dgl:23.11-py3
+FROM nvidia/cuda:12.2.0-devel-ubuntu22.04
 
 WORKDIR /src
 ARG DEBIAN_FRONTEND=noninteractive
@@ -24,20 +24,25 @@ RUN apt-get install -y python3-matplotlib
 RUN apt-get update
 RUN apt-get install -y python3-graph-tool
 
-RUN apt-get -y autoremove
+RUN apt install -y curl
 
 RUN apt-get install -y vim
 RUN apt-get install -y python3-pip
 
-RUN apt update
-RUN apt install -y libqt5charts5 libqt5charts5-dev
-RUN pip install pandas
-RUN pip install networkx==2.6.3
+RUN pip install torch==2.1.0
+RUN pip install dgl -f https://data.dgl.ai/wheels/torch-2.1/cu121/repo.html
+RUN pip install pycairo==1.20.1
+RUN pip install pandas==2.2.2
 RUN pip install scikit-learn
 RUN pip install numpy==1.24.4
-RUN pip install tqdm==4.53.0
+							
 RUN pip install pydantic
+RUN pip install pyyaml
+RUN pip install torchdata==0.7.1
 RUN pip install cupy-cuda12x
+RUN pip install tqdm==4.53.0
+
+ENV DGLBACKEND="pytorch"
 
 WORKDIR /app
 RUN git clone --recursive https://github.com/ASU-VDA-Lab/MLCAD25-Contest-Scripts-Benchmarks.git
@@ -51,6 +56,6 @@ RUN make -j 4
 
 WORKDIR /src
 RUN curl  --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-source $HOME/.cargo/env
+RUN source $HOME/.cargo/env
 
 WORKDIR /app
