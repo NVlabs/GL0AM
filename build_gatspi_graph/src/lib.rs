@@ -78,6 +78,7 @@ impl LeafPinProvider for StdCellPinDefs {
 }
 
 
+
 impl GATSPIGraph {
 
  pub fn build_graph(db: &NetlistDB, stdlib_info: &(impl StandardCellTypeAttribute + std::marker::Sync) ) -> Self {
@@ -122,10 +123,11 @@ impl GATSPIGraph {
     
    let these_celltypes = these_opins2.clone().into_iter().map(|opin| stdlib_info.get_celltype( &db.celltypes[db.pin2cell[opin]], &db.pinnames[opin].1, &db.name )).collect::<Vec<_>>();
    
-   let translation_dict : Vec<(String,String)> =  (legit_top_ports.len()..these_celltypes.len()).map(|id| ( format!("{}/{}", db.pinnames[these_opins2[id]].0.cur, db.pinnames[these_opins2[id]].1) , 
-    if let None = db.netnames[db.pin2net[these_opins2[id]]].2 { String::from(db.netnames[db.pin2net[these_opins2[id]]].1.clone()) } else { format!("{}[{}]", db.netnames[db.pin2net[these_opins2[id]]].1, db.netnames[db.pin2net[these_opins2[id]]].2.unwrap()) }
+   let translation_dict : Vec<(String,String)> =  (legit_top_ports.len()..these_celltypes.len()).map(|id| ( format!("{:?}/{}", db.pinnames[these_opins2[id]].0, db.pinnames[these_opins2[id]].1).replace("HierName()/","").replace("HierName(","").replace(")/", "/") , 
+    if let None = db.netnames[db.pin2net[these_opins2[id]]].2 { format!("{:?}/{}", db.netnames[db.pin2net[these_opins2[id]]].0, db.netnames[db.pin2net[these_opins2[id]]].1).replace("HierName()/","").replace("HierName(","").replace(")/", "/")  } 
+    else { format!("{:?}/{}[{}]", db.netnames[db.pin2net[these_opins2[id]]].0, db.netnames[db.pin2net[these_opins2[id]]].1, db.netnames[db.pin2net[these_opins2[id]]].2.unwrap()).replace("HierName()/","").replace("HierName(","").replace(")/", "/") }
     ) ).collect::<Vec<_>>();
-   
+
    let mut port_dict = HashMap::new();
    for i in legit_top_ports.clone() {
     let hashkey = 

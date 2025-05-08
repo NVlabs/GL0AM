@@ -45,5 +45,4 @@ fn main() {
     
     let mut www = File::create("netlistdb.debug.pkl").unwrap();
     serde_pickle::to_writer(&mut www, &(Vec::from(db.net2pin.start.clone()), Vec::from(db.net2pin.items.clone()), Vec::from(db.pin2net.clone()), format!("{:?}", &db.pinnames) ) , Default::default()).unwrap();
-    
 }
