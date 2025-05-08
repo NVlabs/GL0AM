@@ -26,7 +26,8 @@ Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt)
 ## Setup and Trial Run
 ### 0. Install Rustc and Python packages (if not using docker), Add a Git Submodule)
 ```
-git submodule add  https://github.com/gzz2000/eda-infra-rs.git
+cd <TOP_DIR>
+git submodule update --init --recursive
 #build the rustc executable that translates Verilog into simulation graph
 cd <TOP_DIR>
 cargo build
