@@ -25,9 +25,9 @@ Should be true and ran once when creating the DGL graph from raw CSR graph, from
 parser.add_argument('--createStdCellLibLUT', type=bool, default=False, help='compile the std cell library truth tables or not. should be run once for each new technology')
 parser.add_argument('--cycles', type=int, default=50000, help='target verification cycles to run')
 parser.add_argument('--parallel_sim_cycles', type=int, default=32, choices=[1,2,4,8,16,32,64,128,256], help='# of cycles to be simulated in parallel on GPU')
-#args = parser.parse_args()
-args = parser.parse_args(['--top_name', 'adder', '--graph0FilePath', './adder.pkl', '--graph1FilePath', \
-'./adder.pkl', '--dumpDGLGraph', '1'])
+args = parser.parse_args()
+#args = parser.parse_args(['--top_name', 'adder', '--graph0FilePath', './adder.pkl', '--graph1FilePath', \
+#'./adder.pkl', '--dumpDGLGraph', '1'])
 
 #data loading, builds the DGL graph from csr raw graph
 def build_graph(pkl):
