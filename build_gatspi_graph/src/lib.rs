@@ -88,7 +88,7 @@ impl GATSPIGraph {
   rayon::scope(|s| {
    s.spawn(|_| {
     let mut these_opins = Vec::from_iter((num_ports..db.num_pins).filter(|&index| db.pindirect[index] == Direction::O));
-    let legit_top_ports = Vec::from_iter( (0..num_ports).filter( |pin| (Some(db.pin2net[*pin]) != db.net_zero) && (Some(db.pin2net[*pin]) != db.net_one) ) );    
+    let legit_top_ports = Vec::from_iter( (0..num_ports).filter( |pin| (Some(db.pin2net[*pin]) != db.net_zero) && (Some(db.pin2net[*pin]) != db.net_one) && (db.pindirect[*pin] == Direction::O) ) );    
     these_opins.splice(0..0, legit_top_ports.clone()); 
     let these_opins2 = Vec::from(these_opins);
     let these_nets : Vec<usize> = these_opins2.clone().into_iter().map(|pin| db.pin2net[pin]).collect();
