@@ -26,8 +26,9 @@ parser.add_argument('--createStdCellLibLUT', type=bool, default=False, help='com
 parser.add_argument('--cycles', type=int, default=50000, help='target verification cycles to run')
 parser.add_argument('--parallel_sim_cycles', type=int, default=32, choices=[1,2,4,8,16,32,64,128,256], help='# of cycles to be simulated in parallel on GPU')
 args = parser.parse_args()
-#args = parser.parse_args(['--top_name', 'adder', '--graph0FilePath', './adder.pkl', '--graph1FilePath', \
-#'./adder.pkl', '--dumpDGLGraph', '1'])
+#args = parser.parse_args(['--top_name', 'ariane133', '--graph0FilePath', './ariane133.pkl', '--graph1FilePath', \
+'./ariane133.pkl', '--dumpDGLGraph', '1'])
+PARALLEL_CYCLES=args.parallel_sim_cycles
 
 #data loading, builds the DGL graph from csr raw graph
 def build_graph(pkl):
@@ -220,37 +221,102 @@ port2id1 = {value: key for key, value in id2port1.items()}
 driverPin2id1 = {tupleThing[0]: (index+num_of_top_ports1) for index, tupleThing in enumerate(id2pinAndNet1)}
 net2id1 = {tupleThing[1]: (index+num_of_top_ports1) for index, tupleThing in enumerate(id2pinAndNet1)}
 
-PARALLEL_CYCLES=args.parallel_sim_cycles
 cycles32 = math.ceil(args.cycles/PARALLEL_CYCLES) * PARALLEL_CYCLES
 simLoops = int(cycles32/PARALLEL_CYCLES)
+#hook to figure out if there are combinational loops in the graph
+#TODO code starting to get messy, needs clean up soon...
+nx_g0 = dgl.to_networkx(g0)
+listOfLoops0 = sorted(nx.simple_cycles(nx_g0))
+if len(listOfLoops0):
+ print("Golden Design has combinational loops, results may not be accurate if net within loop drives a Sequential component")
+ g0.ndata['logicLevel'] = th.zeros( len(g0.nodes()), dtype = th.int16)
+ g0.ndata['loopsPresent'] = th.zeros( len(g0.nodes()), dtype = th.int16)
+ allParticipatingLoops = th.concat([th.IntTensor(x) for x in listOfLoops0])
+ participatingNodes0, loopCount = th.unique(allParticipatingLoops, return_counts = True)
+ participatingNodes0 = participatingNodes0.type(th.int64)
+ g0.ndata['loopsPresent'][participatingNodes0] = loopCount.type(th.int16)
+ loopsMaxIter0 = int(2 ** th.max(g0.ndata['loopsPresent']))
+ brokenEdgeSrc = [] ; brokenEdgeDst = [] ; brokenEdgeX = []
+ for loop in listOfLoops0:
+  brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ; 
+  brokenEdgeX.append(int(g0.edata['x'][g0.edge_ids(loop[-1],loop[0])]))
+ brokenEdgeSrc = th.LongTensor(brokenEdgeSrc) ; brokenEdgeDst = th.LongTensor(brokenEdgeDst) ; brokenEdgeX = th.ByteTensor(brokenEdgeX)
+ oldLoopValues0 = cp.asarray(th.zeros( size=(participatingNodes0.size()[0],PARALLEL_CYCLES), dtype=th.uint8 ))
+ g0 = dgl.remove_edges(g0,g0.edge_ids(brokenEdgeSrc, brokenEdgeDst))
+ loop_sg0 = dgl.node_subgraph(g0, participatingNodes0)
+ topo_loop_cpu0 = dgl.traversal.topological_nodes_generator(loop_sg0)
+
+loop_sg0.ndata['_ID']
+
 topo_nodes_cpu0 =  dgl.traversal.topological_nodes_generator(g0)
+outputs0= dgl.topological_nodes_generator(g0, reverse=True)[0]
+outputs0 = outputs0[ g0.in_degrees(outputs0) > 0 ]
 inputNodes0 = topo_nodes_cpu0[0] ; 
 inputNodes0 = inputNodes0[ g0.out_degrees(inputNodes0) > 0 ]
+inputsToRemove =[];
+if len(listOfLoops0):
+ for i in inputNodes0:
+  if i in participatingNodes0:
+   inputsToRemove.append(i)
+for i in inputsToRemove:
+ inputNodes0.remove(i)
 numOfInputNodes0 = inputNodes0.size()[0]
 inputNodes0 = cp.asarray(inputNodes0)
 #shared inputsTotal
 inputsTotal = cp.asarray(th.ByteTensor(np.random.randint(0,2, (numOfInputNodes0,cycles32))))
 currentLogicValue = cp.asarray(th.zeros( size=(g0.nodes().shape[0],PARALLEL_CYCLES), dtype=th.uint8 ))
 #update currentLogicValue separately for graph1. currentLogicValue is a temporary variable anyway
-outputs0= dgl.topological_nodes_generator(g0, reverse=True)[0]
-outputs0 = outputs0[ g0.in_degrees(outputs0) > 0 ]
 #right now we don't use Unconnected outputs, currently using netname "UNCONNECTED" regex to do filtering
 outputs0 = outputs0.tolist() ; toRemove =[]
 for i in outputs0:
  netName = id2pinAndNet0[i-num_of_top_ports0][1] if i >= num_of_top_ports0 else id2port0[i]
  if re.search(r"^UNCONNECTED", netName):
-  toRemove.append(i) 
+  toRemove.append(i) ; continue;
+ if len(listOfLoops0):
+  if i in participatingNodes0:
+   toRemove.append(i) ; 
 for i in toRemove:
  outputs0.remove(i)
 outputs0 = cp.asarray(outputs0, dtype=cp.int32)
 outputsTotal0 = cp.asarray(th.full(size=(outputs0.shape[0],cycles32), fill_value=9, dtype=th.uint8))
 g0.ndata['celltype'][g0.ndata['celltype'] == 999] = 0
 g0.ndata['celloffsets'] = out_offset[g0.ndata['celltype'].type(th.int32)]
-out_array_GPU = cp.asarray(out_array)
+if len(listOfLoops0):
+ g0 = dgl.add_edges(g0, brokenEdgeSrc,brokenEdgeDst, {'x' : brokenEdgeX} )
+
+#hook to figure out if there are combinational loops in the graph
+#TODO code starting to get messy, needs clean up soon...
+nx_g1 = dgl.to_networkx(g1)
+listOfLoops1 = sorted(nx.simple_cycles(nx_g1))
+if len(listOfLoops1):
+ print("Resynth Design has combinational loops, results may not be accurate if net within loop drives a Sequential component")
+ g1.ndata['logicLevel'] = th.zeros( len(g1.nodes()), dtype = th.int16)
+ g1.ndata['loopsPresent'] = th.zeros( len(g1.nodes()), dtype = th.int16)
+ allParticipatingLoops = th.concat([th.IntTensor(x) for x in listOfLoops1])
+ participatingNodes1, loopCount = th.unique(allParticipatingLoops, return_counts = True)
+ participatingNodes1 = participatingNodes1.type(th.int64)
+ g1.ndata['loopsPresent'][participatingNodes1] = loopCount.type(th.int16)
+ loopsMaxIter1 = int(2 ** th.max(g1.ndata['loopsPresent']))
+ brokenEdgeSrc = [] ; brokenEdgeDst = [] ; brokenEdgeX = []
+ for loop in listOfLoops1:
+  brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ; 
+  brokenEdgeX.append(int(g1.edata['x'][g1.edge_ids(loop[-1],loop[0])]))
+ brokenEdgeSrc = th.LongTensor(brokenEdgeSrc) ; brokenEdgeDst = th.LongTensor(brokenEdgeDst) ; brokenEdgeX = th.ByteTensor(brokenEdgeX)
+ oldLoopValues1 = cp.asarray(th.zeros( size=(participatingNodes1.size()[0],PARALLEL_CYCLES), dtype=th.uint8 ))
+ g1 = dgl.remove_edges(g1,g1.edge_ids(brokenEdgeSrc, brokenEdgeDst))
+ loop_sg1 = dgl.node_subgraph(g1, participatingNodes1)
+ topo_loop_cpu1 = dgl.traversal.topological_nodes_generator(loop_sg1)
 
 topo_nodes_cpu1 =  dgl.traversal.topological_nodes_generator(g1)
 inputNodes1 = topo_nodes_cpu1[0] ; 
 inputNodes1 = inputNodes1[ g1.out_degrees(inputNodes1) > 0 ]
+inputsToRemove =[];
+if len(listOfLoops1):
+ for i in inputNodes1:
+  if i in participatingNodes1:
+   inputsToRemove.append(i)
+for i in inputsToRemove:
+ inputNodes1.remove(i)
 numOfInputNodes1 = inputNodes1.size()[0]
 inputNodes1 = cp.asarray(inputNodes1)
 assert numOfInputNodes0 == numOfInputNodes1, "The two graphs don't have the same number of input nodes!"
@@ -265,13 +331,18 @@ outputs1 = outputs1.tolist() ; toRemove =[]
 for i in outputs1:
  netName = id2pinAndNet1[i-num_of_top_ports1][1] if i >= num_of_top_ports1 else id2port1[i]
  if re.search(r"^UNCONNECTED", netName):
-  toRemove.append(i) 
+  toRemove.append(i) continue;
+ if len(listOfLoops1):
+  if i in participatingNodes1:
+   toRemove.append(i) ; 
 for i in toRemove:
  outputs1.remove(i)
 outputs1 = cp.asarray(outputs1, dtype=cp.int32)
 outputsTotal1 = cp.asarray(th.full(size=(outputs1.shape[0],cycles32), fill_value=9, dtype=th.uint8))
 g1.ndata['celltype'][g1.ndata['celltype'] == 999] = 0
 g1.ndata['celloffsets'] = out_offset[g1.ndata['celltype'].type(th.int32)]
+if len(listOfLoops1):
+ g1 = dgl.add_edges(g1, brokenEdgeSrc,brokenEdgeDst, {'x' : brokenEdgeX} )
 
 assert outputs1.shape[0] == outputs0.shape[0], "The two graphs don't have the same number of output nodes!"
 for i in range(outputs0.shape[0]):
@@ -280,10 +351,11 @@ for i in range(outputs0.shape[0]):
  outputs1[i] = alignedOutput
 
 exec(open('evalLogic.cupy').read())
+out_array_GPU = cp.asarray(out_array)
 
 nodesPerStage=[]; driversPerGate=[] ; edgeOffsets=[] ; drivers =[]; celltypes = []; pinPositions=[]
 for logicStage in range(1,len(topo_nodes_cpu0)):
- theseNodes = topo_nodes_cpu0[logicStage]; 
+ theseNodes = topo_nodes_cpu0[logicStage]; g0.ndata['logicLevel'][theseNodes] = logicStage;
  theseDrivers, dummy =  g0.in_edges( theseNodes ) ; 
  #this roundabout stuff is done to process the case of one driver driving multiple input pins of the same cell
  toTuple = [(int(theseDrivers[i]), int(dummy[i])) for i in range(theseDrivers.size()[0])] ; toTensor = th.LongTensor(list(set(toTuple)))
@@ -294,23 +366,77 @@ for logicStage in range(1,len(topo_nodes_cpu0)):
  theseEdgeOffsets = th.roll(th.cumsum(in_degs,  dim=0), 1, 0) ; theseEdgeOffsets[0] = 0 ; edgeOffsets.append(cp.asarray(theseEdgeOffsets));
  actualDrivers, notUsed, edgeIDs = g0.edge_ids(theseDrivers2, dummy2, return_uv=True) ; drivers.append(cp.asarray(actualDrivers.type(th.int32)));
  pinPositions.append(cp.asarray(g0.edata['x'][edgeIDs])) ; 
+if len(listOfLoops0):
+ deepestLoopStage0 = th.max(g0.ndata['logicLevel'][participatingNodes0])
+ nodesPerStage_loop=[]; driversPerGate_loop=[] ; edgeOffsets_loop=[] ; drivers_loop =[]; celltypes_loop = []; pinPositions_loop=[]
+ for logicStage in range(len(topo_loop_cpu0)):
+  theseNodes = loop_sg0.ndata['_ID'][topo_loop_cpu0[logicStage]];
+  theseDrivers, dummy =  g0.in_edges( theseNodes ) ; 
+  #this roundabout stuff is done to process the case of one driver driving multiple input pins of the same cell
+  toTuple = [(int(theseDrivers[i]), int(dummy[i])) for i in range(theseDrivers.size()[0])] ; toTensor = th.LongTensor(list(set(toTuple)))
+  dummy2, shuffleIndex = toTensor[:,1].sort() ; theseDrivers2 = toTensor[:,0][shuffleIndex] ; theseNodes2 = th.unique(dummy2) ;
+  nodesPerStage_loop.append(cp.asarray(theseNodes2.type(th.int32)));
+  celltypes_loop.append(cp.asarray(g0.ndata['celloffsets'][theseNodes2].type(th.int32)));
+  in_degs = g0.in_degrees(theseNodes2) ; driversPerGate_loop.append(cp.asarray(in_degs.type(th.uint8)));
+  theseEdgeOffsets = th.roll(th.cumsum(in_degs,  dim=0), 1, 0) ; theseEdgeOffsets[0] = 0 ; edgeOffsets_loop.append(cp.asarray(theseEdgeOffsets));
+  actualDrivers, notUsed, edgeIDs = g0.edge_ids(theseDrivers2, dummy2, return_uv=True) ; drivers_loop.append(cp.asarray(actualDrivers.type(th.int32)));
+  pinPositions_loop.append(cp.asarray(g0.edata['x'][edgeIDs])) ; 
 temp_delta = timer() - temp_start
 print("Golden sim graph done in " + f"{temp_delta:.3f}" + ' seconds')
 
 print("start golden simulation...")
 temp_start = timer()
-for c in range(simLoops):
- currentLogicValue[inputNodes0] = inputsTotal[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES]
- for logicStage in range(len(topo_nodes_cpu0)-1):
-  theseNodes = nodesPerStage[logicStage] ; theseCelltypes = celltypes[logicStage]; numDrivers = driversPerGate[logicStage];
-  theseDrivers = drivers[logicStage] ; thesePinPositions = pinPositions[logicStage]; theseEdgeOffsets = edgeOffsets[logicStage];
-  evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
-   (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
-   out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
- outputsTotal0[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES] = currentLogicValue[outputs0]
+if len(listOfLoops0):
+ for c in range(simLoops):
+  currentLogicValue[inputNodes0] = inputsTotal[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES]
+  for logicStage in range(0,deepestLoopStage0):
+   theseNodes = nodesPerStage[logicStage] ; theseCelltypes = celltypes[logicStage]; numDrivers = driversPerGate[logicStage];
+   theseDrivers = drivers[logicStage] ; thesePinPositions = pinPositions[logicStage]; theseEdgeOffsets = edgeOffsets[logicStage];
+   evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
+    (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
+    out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
+  loopConverged = 0 ; loopCycles=0
+  while (!loopConverged and loopCycles<loopsMaxIter0):
+   for logicStage in range(len(topo_loop_cpu0)):
+    theseNodes = nodesPerStage_loop[logicStage] ; theseCelltypes = celltypes_loop[logicStage]; numDrivers = driversPerGate_loop[logicStage];
+    theseDrivers = drivers_loop[logicStage] ; thesePinPositions = pinPositions_loop[logicStage]; theseEdgeOffsets = edgeOffsets_loop[logicStage];
+    evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
+     (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
+     out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
+   loopCycles+=1; loopConverged = cp.all(currentLogicValue[participatingNodes0] == oldLoopValues0) ;
+   oldLoopValues0 = currentLogicValue[participatingNodes0]
+  assert loopConverged, "There are non-convergent combinational loops in your design! Check it!!!"
+  for logicStage in range(deepestLoopStage0,len(topo_nodes_cpu0)-1):
+   theseNodes = nodesPerStage[logicStage] ; theseCelltypes = celltypes[logicStage]; numDrivers = driversPerGate[logicStage];
+   theseDrivers = drivers[logicStage] ; thesePinPositions = pinPositions[logicStage]; theseEdgeOffsets = edgeOffsets[logicStage];
+   evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
+    (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
+    out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) ) 
+  outputsTotal0[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES] = currentLogicValue[outputs0]
+else:
+ for c in range(simLoops):
+  currentLogicValue[inputNodes0] = inputsTotal[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES]
+  for logicStage in range(len(topo_nodes_cpu0)-1):
+   theseNodes = nodesPerStage[logicStage] ; theseCelltypes = celltypes[logicStage]; numDrivers = driversPerGate[logicStage];
+   theseDrivers = drivers[logicStage] ; thesePinPositions = pinPositions[logicStage]; theseEdgeOffsets = edgeOffsets[logicStage];
+   evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
+    (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
+    out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
+  outputsTotal0[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES] = currentLogicValue[outputs0]
 temp_delta = timer() - temp_start
 print("Golden simulation for " + str(cycles32) + ' cycles done in ' + f"{temp_delta:.3f}" + ' seconds')
 
+'''for c in range(PARALLEL_CYCLES):
+ A=[] ; B=[]; C=[] ; printA='' ; printB='' ;  printC='' ; 
+ for i in range(31,-1,-1):
+  aName = 'a' + '[' + str(i) + ']' ; bName = 'b' + '[' + str(i) + ']' ; cName = 'c' + '[' + str(i) + ']' ; 
+  bitIDa = port2id0[aName] ;  bitIDb = port2id0[bName] ;bitIDc = port2id0[cName] ;
+  A.append(str(int(currentLogicValue[bitIDa,c]))) ; B.append(str(int(currentLogicValue[bitIDb,c]))) ; C.append(str(int(currentLogicValue[bitIDc,c]))) ; 
+ A = "".join(A) ; B = "".join(B) ; C = "".join(C) ; 
+ printA += 'a' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(A, base=2)))
+ printB += 'b' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(B, base=2)))
+ printC += 'c' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(C, base=2)))
+ print(printA + ' ' + printB + ' : ' + printC)'''
 
 print("start edited simulation graph setup...")
 temp_start = timer()
@@ -331,6 +457,21 @@ for logicStage in range(1,len(topo_nodes_cpu1)):
  theseEdgeOffsets = th.roll(th.cumsum(in_degs,  dim=0), 1, 0) ; theseEdgeOffsets[0] = 0 ; edgeOffsets.append(cp.asarray(theseEdgeOffsets));
  actualDrivers, notUsed, edgeIDs = g1.edge_ids(theseDrivers2, dummy2, return_uv=True) ; drivers.append(cp.asarray(actualDrivers.type(th.int32)));
  pinPositions.append(cp.asarray(g1.edata['x'][edgeIDs])) ; 
+if len(listOfLoops1):
+ deepestLoopStage1 = th.max(g1.ndata['logicLevel'][participatingNodes1])
+ nodesPerStage_loop=[]; driversPerGate_loop=[] ; edgeOffsets_loop=[] ; drivers_loop =[]; celltypes_loop = []; pinPositions_loop=[]
+ for logicStage in range(len(topo_loop_cpu1)):
+  theseNodes = loop_sg1.ndata['_ID'][topo_loop_cpu1[logicStage]];
+  theseDrivers, dummy =  g1.in_edges( theseNodes ) ; 
+  #this roundabout stuff is done to process the case of one driver driving multiple input pins of the same cell
+  toTuple = [(int(theseDrivers[i]), int(dummy[i])) for i in range(theseDrivers.size()[0])] ; toTensor = th.LongTensor(list(set(toTuple)))
+  dummy2, shuffleIndex = toTensor[:,1].sort() ; theseDrivers2 = toTensor[:,0][shuffleIndex] ; theseNodes2 = th.unique(dummy2) ;
+  nodesPerStage_loop.append(cp.asarray(theseNodes2.type(th.int32)));
+  celltypes_loop.append(cp.asarray(g1.ndata['celloffsets'][theseNodes2].type(th.int32)));
+  in_degs = g1.in_degrees(theseNodes2) ; driversPerGate_loop.append(cp.asarray(in_degs.type(th.uint8)));
+  theseEdgeOffsets = th.roll(th.cumsum(in_degs,  dim=0), 1, 0) ; theseEdgeOffsets[0] = 0 ; edgeOffsets_loop.append(cp.asarray(theseEdgeOffsets));
+  actualDrivers, notUsed, edgeIDs = g1.edge_ids(theseDrivers2, dummy2, return_uv=True) ; drivers_loop.append(cp.asarray(actualDrivers.type(th.int32)));
+  pinPositions_loop.append(cp.asarray(g1.edata['x'][edgeIDs])) ; 
 mempool = cp.get_default_memory_pool()
 mempool.free_all_blocks()
 temp_delta = timer() - temp_start
@@ -338,17 +479,57 @@ print("Edited sim graph done in " + f"{temp_delta:.3f}" + ' seconds')
 
 print("start edited simulation...")
 temp_start = timer()
-for c in range(simLoops):
- currentLogicValue[inputNodes1] = inputsTotal[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES]
- for logicStage in range(len(topo_nodes_cpu1)-1):
-  theseNodes = nodesPerStage[logicStage] ; theseCelltypes = celltypes[logicStage]; numDrivers = driversPerGate[logicStage];
-  theseDrivers = drivers[logicStage] ; thesePinPositions = pinPositions[logicStage]; theseEdgeOffsets = edgeOffsets[logicStage];
-  evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
-   (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
-   out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
- outputsTotal1[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES] = currentLogicValue[outputs1]
+if len(listOfLoops1):
+ for c in range(simLoops):
+  currentLogicValue[inputNodes1] = inputsTotal[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES]
+  for logicStage in range(0,deepestLoopStage1):
+   theseNodes = nodesPerStage[logicStage] ; theseCelltypes = celltypes[logicStage]; numDrivers = driversPerGate[logicStage];
+   theseDrivers = drivers[logicStage] ; thesePinPositions = pinPositions[logicStage]; theseEdgeOffsets = edgeOffsets[logicStage];
+   evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
+    (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
+    out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
+  loopConverged = 0 ; loopCycles=0
+  while (!loopConverged and loopCycles<loopsMaxIter1):
+   for logicStage in range(len(topo_loop_cpu1)):
+    theseNodes = nodesPerStage_loop[logicStage] ; theseCelltypes = celltypes_loop[logicStage]; numDrivers = driversPerGate_loop[logicStage];
+    theseDrivers = drivers_loop[logicStage] ; thesePinPositions = pinPositions_loop[logicStage]; theseEdgeOffsets = edgeOffsets_loop[logicStage];
+    evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
+     (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
+     out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
+   loopCycles+=1; loopConverged = cp.all(currentLogicValue[participatingNodes1] == oldLoopValues1) ;
+   oldLoopValues1 = currentLogicValue[participatingNodes1]
+  assert loopConverged, "There are non-convergent combinational loops in your design! Check it!!!"
+  for logicStage in range(deepestLoopStage1,len(topo_nodes_cpu1)-1):
+   theseNodes = nodesPerStage[logicStage] ; theseCelltypes = celltypes[logicStage]; numDrivers = driversPerGate[logicStage];
+   theseDrivers = drivers[logicStage] ; thesePinPositions = pinPositions[logicStage]; theseEdgeOffsets = edgeOffsets[logicStage];
+   evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
+    (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
+    out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) ) 
+  outputsTotal1[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES] = currentLogicValue[outputs1]
+else:
+ for c in range(simLoops):
+  currentLogicValue[inputNodes1] = inputsTotal[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES]
+  for logicStage in range(len(topo_nodes_cpu1)-1):
+   theseNodes = nodesPerStage[logicStage] ; theseCelltypes = celltypes[logicStage]; numDrivers = driversPerGate[logicStage];
+   theseDrivers = drivers[logicStage] ; thesePinPositions = pinPositions[logicStage]; theseEdgeOffsets = edgeOffsets[logicStage];
+   evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
+    (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
+    out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
+  outputsTotal1[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES] = currentLogicValue[outputs1]
 temp_delta = timer() - temp_start
 print("Edited simulation for " + str(cycles32) + ' cycles done in ' + f"{temp_delta:.3f}" + ' seconds')
+
+'''for c in range(PARALLEL_CYCLES):
+ A=[] ; B=[]; C=[] ; printA='' ; printB='' ;  printC='' ; 
+ for i in range(31,-1,-1):
+  aName = 'a' + '[' + str(i) + ']' ; bName = 'b' + '[' + str(i) + ']' ; cName = 'c' + '[' + str(i) + ']' ; 
+  bitIDa = port2id1[aName] ;  bitIDb = port2id1[bName] ;bitIDc = port2id1[cName] ;
+  A.append(str(int(currentLogicValue[bitIDa,c]))) ; B.append(str(int(currentLogicValue[bitIDb,c]))) ; C.append(str(int(currentLogicValue[bitIDc,c]))) ; 
+ A = "".join(A) ; B = "".join(B) ; C = "".join(C) ; 
+ printA += 'a' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(A, base=2)))
+ printB += 'b' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(B, base=2)))
+ printC += 'c' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(C, base=2)))
+ print(printA + ' ' + printB + ' : ' + printC)'''
 
 print("start result compare...")
 temp_start = timer()
@@ -373,4 +554,3 @@ else:
  print("SHOULD BE: " + str(rightValue) + ' BUT IS: ' + str(wrongValue))
 temp_delta = timer() - temp_start
 print("Golden vs Edited comparison done in " + f"{temp_delta:.3f}" + ' seconds')
-
