@@ -235,7 +235,7 @@ if len(listOfLoops0):
  participatingNodes0, loopCount = th.unique(allParticipatingLoops, return_counts = True)
  participatingNodes0 = participatingNodes0.type(th.int64)
  g0.ndata['loopsPresent'][participatingNodes0] = loopCount.type(th.int16)
- loopsMaxIter0 = int(2 ** th.max(g0.ndata['loopsPresent']))
+ loopsMaxIter0 = int(th.max(g0.ndata['loopsPresent']))
  brokenEdgeSrc = [] ; brokenEdgeDst = [] ; brokenEdgeX = []
  for loop in listOfLoops0:
   brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ; 
@@ -296,7 +296,7 @@ if len(listOfLoops1):
  participatingNodes1, loopCount = th.unique(allParticipatingLoops, return_counts = True)
  participatingNodes1 = participatingNodes1.type(th.int64)
  g1.ndata['loopsPresent'][participatingNodes1] = loopCount.type(th.int16)
- loopsMaxIter1 = int(2 ** th.max(g1.ndata['loopsPresent']))
+ loopsMaxIter1 = int(th.max(g1.ndata['loopsPresent']))
  brokenEdgeSrc = [] ; brokenEdgeDst = [] ; brokenEdgeX = []
  for loop in listOfLoops1:
   brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ; 
