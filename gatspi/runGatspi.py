@@ -27,7 +27,7 @@ parser.add_argument('--cycles', type=int, default=50000, help='target verificati
 parser.add_argument('--parallel_sim_cycles', type=int, default=32, choices=[1,2,4,8,16,32,64,128,256], help='# of cycles to be simulated in parallel on GPU')
 args = parser.parse_args()
 #args = parser.parse_args(['--top_name', 'ariane133', '--graph0FilePath', './ariane133.pkl', '--graph1FilePath', \
-'./ariane133.pkl', '--dumpDGLGraph', '1'])
+#'./ariane133.pkl', '--dumpDGLGraph', '1'])
 PARALLEL_CYCLES=args.parallel_sim_cycles
 
 #data loading, builds the DGL graph from csr raw graph
