@@ -230,37 +230,38 @@ listOfLoops0 = sorted(nx.simple_cycles(nx_g0))
 if len(listOfLoops0):
  print("Golden Design has combinational loops, results may not be accurate if net within loop drives a Sequential component")
  g0.ndata['logicLevel'] = th.zeros( len(g0.nodes()), dtype = th.int16)
- g0.ndata['loopsPresent'] = th.zeros( len(g0.nodes()), dtype = th.int16)
+ g0.ndata['loopsPresent'] = th.zeros( len(g0.nodes()), dtype = th.int32)
  allParticipatingLoops = th.concat([th.IntTensor(x) for x in listOfLoops0])
  participatingNodes0, loopCount = th.unique(allParticipatingLoops, return_counts = True)
  participatingNodes0 = participatingNodes0.type(th.int64)
- g0.ndata['loopsPresent'][participatingNodes0] = loopCount.type(th.int16)
- loopsMaxIter0 = int(th.max(g0.ndata['loopsPresent']))
+ g0.ndata['loopsPresent'][participatingNodes0] = loopCount.type(th.int32)
+ #if too many loops, will overflow. So set a max value I guess.
+ loopsMaxIter0 = max( int(2 ** th.max(g0.ndata['loopsPresent'])), args.cycles )
  brokenEdgeSrc = [] ; brokenEdgeDst = [] ; brokenEdgeX = []
  for loop in listOfLoops0:
-  brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ; 
-  brokenEdgeX.append(int(g0.edata['x'][g0.edge_ids(loop[-1],loop[0])]))
- brokenEdgeSrc = th.LongTensor(brokenEdgeSrc) ; brokenEdgeDst = th.LongTensor(brokenEdgeDst) ; brokenEdgeX = th.ByteTensor(brokenEdgeX)
+  brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ;
+ brokenEdgeSrc = th.LongTensor(brokenEdgeSrc) ; brokenEdgeDst = th.LongTensor(brokenEdgeDst) ; 
  oldLoopValues0 = cp.asarray(th.zeros( size=(participatingNodes0.size()[0],PARALLEL_CYCLES), dtype=th.uint8 ))
- g0 = dgl.remove_edges(g0,g0.edge_ids(brokenEdgeSrc, brokenEdgeDst))
+ brokenEdgeIDs = th.unique(g0.edge_ids(brokenEdgeSrc, brokenEdgeDst))
+ brokenEdgeSrc, brokenEdgeDst = g0.find_edges(brokenEdgeIDs)
+ brokenEdgeX = g0.edata['x'][brokenEdgeIDs]
+ g0 = dgl.remove_edges(g0,brokenEdgeIDs)
  loop_sg0 = dgl.node_subgraph(g0, participatingNodes0)
  topo_loop_cpu0 = dgl.traversal.topological_nodes_generator(loop_sg0)
-
-loop_sg0.ndata['_ID']
 
 topo_nodes_cpu0 =  dgl.traversal.topological_nodes_generator(g0)
 outputs0= dgl.topological_nodes_generator(g0, reverse=True)[0]
 outputs0 = outputs0[ g0.in_degrees(outputs0) > 0 ]
 inputNodes0 = topo_nodes_cpu0[0] ; 
 inputNodes0 = inputNodes0[ g0.out_degrees(inputNodes0) > 0 ]
-inputsToRemove =[];
+inputsToRemove =[]; inputNodes0 = list(inputNodes0)
 if len(listOfLoops0):
  for i in inputNodes0:
   if i in participatingNodes0:
    inputsToRemove.append(i)
 for i in inputsToRemove:
  inputNodes0.remove(i)
-numOfInputNodes0 = inputNodes0.size()[0]
+numOfInputNodes0 = len(inputNodes0)
 inputNodes0 = cp.asarray(inputNodes0)
 #shared inputsTotal
 inputsTotal = cp.asarray(th.ByteTensor(np.random.randint(0,2, (numOfInputNodes0,cycles32))))
@@ -291,33 +292,35 @@ listOfLoops1 = sorted(nx.simple_cycles(nx_g1))
 if len(listOfLoops1):
  print("Resynth Design has combinational loops, results may not be accurate if net within loop drives a Sequential component")
  g1.ndata['logicLevel'] = th.zeros( len(g1.nodes()), dtype = th.int16)
- g1.ndata['loopsPresent'] = th.zeros( len(g1.nodes()), dtype = th.int16)
+ g1.ndata['loopsPresent'] = th.zeros( len(g1.nodes()), dtype = th.int32)
  allParticipatingLoops = th.concat([th.IntTensor(x) for x in listOfLoops1])
  participatingNodes1, loopCount = th.unique(allParticipatingLoops, return_counts = True)
  participatingNodes1 = participatingNodes1.type(th.int64)
- g1.ndata['loopsPresent'][participatingNodes1] = loopCount.type(th.int16)
- loopsMaxIter1 = int(th.max(g1.ndata['loopsPresent']))
+ g1.ndata['loopsPresent'][participatingNodes1] = loopCount.type(th.int32)
+ loopsMaxIter1 = max( int(2 ** th.max(g1.ndata['loopsPresent'])), args.cycles )
  brokenEdgeSrc = [] ; brokenEdgeDst = [] ; brokenEdgeX = []
  for loop in listOfLoops1:
-  brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ; 
-  brokenEdgeX.append(int(g1.edata['x'][g1.edge_ids(loop[-1],loop[0])]))
- brokenEdgeSrc = th.LongTensor(brokenEdgeSrc) ; brokenEdgeDst = th.LongTensor(brokenEdgeDst) ; brokenEdgeX = th.ByteTensor(brokenEdgeX)
+  brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ;
+ brokenEdgeSrc = th.LongTensor(brokenEdgeSrc) ; brokenEdgeDst = th.LongTensor(brokenEdgeDst) ; 
  oldLoopValues1 = cp.asarray(th.zeros( size=(participatingNodes1.size()[0],PARALLEL_CYCLES), dtype=th.uint8 ))
- g1 = dgl.remove_edges(g1,g1.edge_ids(brokenEdgeSrc, brokenEdgeDst))
+ brokenEdgeIDs = th.unique(g1.edge_ids(brokenEdgeSrc, brokenEdgeDst))
+ brokenEdgeSrc, brokenEdgeDst = g1.find_edges(brokenEdgeIDs)
+ brokenEdgeX = g1.edata['x'][brokenEdgeIDs]
+ g1 = dgl.remove_edges(g1,brokenEdgeIDs)
  loop_sg1 = dgl.node_subgraph(g1, participatingNodes1)
  topo_loop_cpu1 = dgl.traversal.topological_nodes_generator(loop_sg1)
 
 topo_nodes_cpu1 =  dgl.traversal.topological_nodes_generator(g1)
 inputNodes1 = topo_nodes_cpu1[0] ; 
 inputNodes1 = inputNodes1[ g1.out_degrees(inputNodes1) > 0 ]
-inputsToRemove =[];
+inputsToRemove =[]; inputNodes1 = list(inputNodes1)
 if len(listOfLoops1):
  for i in inputNodes1:
   if i in participatingNodes1:
    inputsToRemove.append(i)
 for i in inputsToRemove:
  inputNodes1.remove(i)
-numOfInputNodes1 = inputNodes1.size()[0]
+numOfInputNodes1 = len(inputNodes1)
 inputNodes1 = cp.asarray(inputNodes1)
 assert numOfInputNodes0 == numOfInputNodes1, "The two graphs don't have the same number of input nodes!"
 for i in range(numOfInputNodes0):
@@ -331,7 +334,7 @@ outputs1 = outputs1.tolist() ; toRemove =[]
 for i in outputs1:
  netName = id2pinAndNet1[i-num_of_top_ports1][1] if i >= num_of_top_ports1 else id2port1[i]
  if re.search(r"^UNCONNECTED", netName):
-  toRemove.append(i) continue;
+  toRemove.append(i); continue;
  if len(listOfLoops1):
   if i in participatingNodes1:
    toRemove.append(i) ; 
@@ -355,8 +358,10 @@ out_array_GPU = cp.asarray(out_array)
 
 nodesPerStage=[]; driversPerGate=[] ; edgeOffsets=[] ; drivers =[]; celltypes = []; pinPositions=[]
 for logicStage in range(1,len(topo_nodes_cpu0)):
- theseNodes = topo_nodes_cpu0[logicStage]; g0.ndata['logicLevel'][theseNodes] = logicStage;
- theseDrivers, dummy =  g0.in_edges( theseNodes ) ; 
+ theseNodes = topo_nodes_cpu0[logicStage]; 
+ if len(listOfLoops0):
+  g0.ndata['logicLevel'][theseNodes] = logicStage
+ theseDrivers, dummy =  g0.in_edges( theseNodes ) ;
  #this roundabout stuff is done to process the case of one driver driving multiple input pins of the same cell
  toTuple = [(int(theseDrivers[i]), int(dummy[i])) for i in range(theseDrivers.size()[0])] ; toTensor = th.LongTensor(list(set(toTuple)))
  dummy2, shuffleIndex = toTensor[:,1].sort() ; theseDrivers2 = toTensor[:,0][shuffleIndex] ; theseNodes2 = th.unique(dummy2) ;
@@ -395,8 +400,8 @@ if len(listOfLoops0):
    evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
     (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
     out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
-  loopConverged = 0 ; loopCycles=0
-  while (!loopConverged and loopCycles<loopsMaxIter0):
+  loopConverged = 0 ; loopCycles=0 ;
+  while ((not loopConverged) and loopCycles<loopsMaxIter0):
    for logicStage in range(len(topo_loop_cpu0)):
     theseNodes = nodesPerStage_loop[logicStage] ; theseCelltypes = celltypes_loop[logicStage]; numDrivers = driversPerGate_loop[logicStage];
     theseDrivers = drivers_loop[logicStage] ; thesePinPositions = pinPositions_loop[logicStage]; theseEdgeOffsets = edgeOffsets_loop[logicStage];
@@ -404,9 +409,9 @@ if len(listOfLoops0):
      (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
      out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
    loopCycles+=1; loopConverged = cp.all(currentLogicValue[participatingNodes0] == oldLoopValues0) ;
-   oldLoopValues0 = currentLogicValue[participatingNodes0]
+   oldLoopValues0 = currentLogicValue[participatingNodes0] ;
   assert loopConverged, "There are non-convergent combinational loops in your design! Check it!!!"
-  for logicStage in range(deepestLoopStage0,len(topo_nodes_cpu0)-1):
+  for logicStage in range(len(topo_nodes_cpu0)-1):
    theseNodes = nodesPerStage[logicStage] ; theseCelltypes = celltypes[logicStage]; numDrivers = driversPerGate[logicStage];
    theseDrivers = drivers[logicStage] ; thesePinPositions = pinPositions[logicStage]; theseEdgeOffsets = edgeOffsets[logicStage];
    evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
@@ -442,11 +447,12 @@ print("start edited simulation graph setup...")
 temp_start = timer()
 mempool = cp.get_default_memory_pool()
 mempool.free_all_blocks()
-currentLogicValue = cp.asarray(th.zeros( size=(g1.nodes().shape[0],PARALLEL_CYCLES), dtype=th.uint8 ))
 
 nodesPerStage=[]; driversPerGate=[] ; edgeOffsets=[] ; drivers =[]; celltypes = []; pinPositions=[]
 for logicStage in range(1,len(topo_nodes_cpu1)):
- theseNodes = topo_nodes_cpu1[logicStage]; 
+ theseNodes = topo_nodes_cpu1[logicStage];
+ if len(listOfLoops1):
+  g1.ndata['logicLevel'][theseNodes] = logicStage
  theseDrivers, dummy =  g1.in_edges( theseNodes ) ; 
  #this roundabout stuff is done to process the case of one driver driving multiple input pins of the same cell
  toTuple = [(int(theseDrivers[i]), int(dummy[i])) for i in range(theseDrivers.size()[0])] ; toTensor = th.LongTensor(list(set(toTuple)))
@@ -479,6 +485,8 @@ print("Edited sim graph done in " + f"{temp_delta:.3f}" + ' seconds')
 
 print("start edited simulation...")
 temp_start = timer()
+currentLogicValue = cp.asarray(th.zeros( size=(g1.nodes().shape[0],PARALLEL_CYCLES), dtype=th.uint8 ))
+#reset circuit state in-case of loops present
 if len(listOfLoops1):
  for c in range(simLoops):
   currentLogicValue[inputNodes1] = inputsTotal[:,c*PARALLEL_CYCLES:c*PARALLEL_CYCLES+PARALLEL_CYCLES]
@@ -489,7 +497,7 @@ if len(listOfLoops1):
     (currentLogicValue,theseNodes,theseCelltypes,numDrivers,theseDrivers,thesePinPositions,theseEdgeOffsets,\
     out_array_GPU,theseNodes.shape[0],PARALLEL_CYCLES) )
   loopConverged = 0 ; loopCycles=0
-  while (!loopConverged and loopCycles<loopsMaxIter1):
+  while ((not loopConverged) and loopCycles<loopsMaxIter1):
    for logicStage in range(len(topo_loop_cpu1)):
     theseNodes = nodesPerStage_loop[logicStage] ; theseCelltypes = celltypes_loop[logicStage]; numDrivers = driversPerGate_loop[logicStage];
     theseDrivers = drivers_loop[logicStage] ; thesePinPositions = pinPositions_loop[logicStage]; theseEdgeOffsets = edgeOffsets_loop[logicStage];
@@ -499,7 +507,7 @@ if len(listOfLoops1):
    loopCycles+=1; loopConverged = cp.all(currentLogicValue[participatingNodes1] == oldLoopValues1) ;
    oldLoopValues1 = currentLogicValue[participatingNodes1]
   assert loopConverged, "There are non-convergent combinational loops in your design! Check it!!!"
-  for logicStage in range(deepestLoopStage1,len(topo_nodes_cpu1)-1):
+  for logicStage in range(len(topo_nodes_cpu1)-1):
    theseNodes = nodesPerStage[logicStage] ; theseCelltypes = celltypes[logicStage]; numDrivers = driversPerGate[logicStage];
    theseDrivers = drivers[logicStage] ; thesePinPositions = pinPositions[logicStage]; theseEdgeOffsets = edgeOffsets[logicStage];
    evalLogic( (1,math.ceil(theseNodes.shape[0]/(512/PARALLEL_CYCLES))), (PARALLEL_CYCLES,(512/PARALLEL_CYCLES)),\
