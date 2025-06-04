@@ -51,4 +51,8 @@ python3 runGatspi.py --top_name adder --graph0FilePath ./adder.pkl --graph1FileP
 #The results of the simulation comparison is printed to STDOUT
 #Generally, we'll want --dumpDGLGraph 1 if either netlist changes
 #Generally, only need to run with --createStdCellLibLUT 1 once
+#Now, there is also added the option to add a list of output port and register /D pin connected nets into a file and only query the equivalency of those nets.
+#Example:
+python3 runGatspi.py --top_name adder --graph0FilePath ./adder.pkl --graph1FilePath ./adder_altIncorrect.pkl --dumpDGLGraph 1 --queryNetsListFile queryNets.lst
+python3 runGatspi.py --top_name adder --graph0FilePath ./adder.pkl --graph1FilePath ./adder_altCorrect.pkl --dumpDGLGraph 1 --queryNetsListFile queryNets.lst
 ```
