@@ -25,9 +25,10 @@ Should be true and ran once when creating the DGL graph from raw CSR graph, from
 parser.add_argument('--createStdCellLibLUT', type=bool, default=False, help='compile the std cell library truth tables or not. should be run once for each new technology')
 parser.add_argument('--cycles', type=int, default=50000, help='target verification cycles to run')
 parser.add_argument('--parallel_sim_cycles', type=int, default=32, choices=[1,2,4,8,16,32,64,128,256], help='# of cycles to be simulated in parallel on GPU')
+parser.add_argument('--queryNetsListFile', type=str, default = '', help='path to file which houses a list of nets to compare. Expected file format is one net per line in file.')
 args = parser.parse_args()
-#args = parser.parse_args(['--top_name', 'ariane133', '--graph0FilePath', './ariane133.pkl', '--graph1FilePath', \
-#'./ariane133.pkl', '--dumpDGLGraph', '1'])
+#args = parser.parse_args(['--top_name', 'adder', '--graph0FilePath', './adder.pkl', '--graph1FilePath', \
+#'./adder_altIncorrect.pkl', '--dumpDGLGraph', '1', '--queryNetsListFile', 'queryNets.lst'])
 PARALLEL_CYCLES=args.parallel_sim_cycles
 
 #data loading, builds the DGL graph from csr raw graph
@@ -42,38 +43,45 @@ def build_graph(pkl):
  #"global variables"
  num_of_gatspi_cells = data['num_of_gatspi_cells'] ; num_of_top_ports = data['num_of_top_ports'] ;
  id2pinAndNet = data['gatspi_cellname_index']; id2port = data['gatspi_port_index'];
+ tempPortDict = {key: (value,value) for key,value in id2port.items()}
+ tempPinNetDict = {index+num_of_top_ports: value for index, value in enumerate(id2pinAndNet)}
+ tempPortDict.update(tempPinNetDict)
+ driverPin2id = {value[0]: key for key, value in tempPortDict.items()}
+ net2id = {value[1]: key for key, value in tempPortDict.items()}   
  print("graph created")
  later=datetime.now()
  delta=(later-now).total_seconds()
  print("creating the DGL graph took " + str(delta) + " seconds on the CPU")
- return g, num_of_gatspi_cells, num_of_top_ports, id2pinAndNet, id2port
+ return g, num_of_gatspi_cells, num_of_top_ports, tempPortDict, driverPin2id, net2id
 
 if args.dumpDGLGraph:
  print("creating the DGL graph from raw CSR graph...")
  temp_start = timer() ;
- g0, num_of_gatspi_cells0, num_of_top_ports0, id2pinAndNet0, id2port0 = build_graph(args.graph0FilePath)
+ g0, num_of_gatspi_cells0, num_of_top_ports0, id2pinAndNet0, driverPin2id0, net2id0 = build_graph(args.graph0FilePath)
  fileObject = open(args.top_name + "_DGLGraph0", 'wb')
  pickle.dump({'g': g0,
   'num_of_gatspi_cells' : num_of_gatspi_cells0,
   'num_of_top_ports' : num_of_top_ports0,
   'id2pinAndNet' : id2pinAndNet0,
-  'id2port' : id2port0}, fileObject)
- g1, num_of_gatspi_cells1, num_of_top_ports1, id2pinAndNet1, id2port1 = build_graph(args.graph1FilePath)
+  'driverPin2id' : driverPin2id0,
+  'net2id' : net2id0}, fileObject)
+ g1, num_of_gatspi_cells1, num_of_top_ports1, id2pinAndNet1, driverPin2id1, net2id1 = build_graph(args.graph1FilePath)
  fileObject = open(args.top_name + "_DGLGraph1", 'wb')
  pickle.dump({'g': g1,
   'num_of_gatspi_cells' : num_of_gatspi_cells1,
   'num_of_top_ports' : num_of_top_ports1,
   'id2pinAndNet' : id2pinAndNet1,
-  'id2port' : id2port1}, fileObject)
+  'driverPin2id' : driverPin2id1,
+  'net2id' : net2id1}, fileObject)
  temp_delta = timer() - temp_start
  print("DGL graph done in " + f"{temp_delta:.3f}" + ' seconds')
 else:
  data = np.load(args.graph0FilePath, allow_pickle=True);
  g0 = data['g']; num_of_gatspi_cells0 = data['num_of_gatspi_cells'] ; num_of_top_ports0 = data['num_of_top_ports'] ; 
- id2pinAndNet0 = data['id2pinAndNet'] ; id2port0 = data['id2port'] ;
+ id2pinAndNet0 = data['id2pinAndNet'] ; driverPin2id0 = data['driverPin2id'] ; net2id0 = data['net2id'] ;
  data = np.load(args.graph1FilePath, allow_pickle=True);
  g1 = data['g']; num_of_gatspi_cells1 = data['num_of_gatspi_cells'] ; num_of_top_ports1 = data['num_of_top_ports'] ; 
- id2pinAndNet1 = data['id2pinAndNet'] ; id2port1 = data['id2port'] ;
+ id2pinAndNet1 = data['id2pinAndNet'] ; driverPin2id1 = data['driverPin2id'] ; net2id1 = data['net2id'] ;
 
 if args.createStdCellLibLUT:
  print("creating new std cell lib LUT")
@@ -209,17 +217,48 @@ if args.createStdCellLibLUT:
 else:
  out_array, out_offset = th.load("MLCADDesignContest2025StdCellLibLUT")
 
+#prune the graph if we want only targeted nets to be compared.
+if args.queryNetsListFile != '':
+ fh = open(args.queryNetsListFile, 'r')
+ lines = fh.readlines()
+ lines = [line.rstrip('\n').strip() for line in lines]
+ queryNets = []
+ for net in lines:
+  thisID = net2id0[net] ; queryNets.append(thisID);
+ queryNets = th.LongTensor(queryNets)
+ newg0, inverse_indices = dgl.khop_out_subgraph(g0, queryNets, k=3000)
+ tempOuts = newg0.ndata['_ID']
+ newg0, inverse_indices = dgl.khop_in_subgraph(g0, tempOuts, k=3000)
+ id2pinAndNet0_temp = { x: id2pinAndNet0[int(newg0.ndata['_ID'][x])] for x in range(len(newg0.nodes()))}
+ id2pinAndNet0 = id2pinAndNet0_temp
+ driverPin2id0 = {value[0]: key for key, value in id2pinAndNet0.items()}
+ net2id0 = {value[1]: key for key, value in id2pinAndNet0.items()}
+ g0 = newg0
+ 
+ queryNets = []
+ for net in lines:
+  thisID = net2id1[net] ; queryNets.append(thisID);
+ queryNets = th.LongTensor(queryNets)
+ newg1, inverse_indices = dgl.khop_out_subgraph(g1, queryNets, k=3000)
+ tempOuts = newg1.ndata['_ID']
+ newg1, inverse_indices = dgl.khop_in_subgraph(g1, tempOuts, k=3000)
+ id2pinAndNet1_temp = { x: id2pinAndNet1[int(newg1.ndata['_ID'][x])] for x in range(len(newg1.nodes()))}
+ id2pinAndNet1 = id2pinAndNet1_temp
+ driverPin2id1 = {value[0]: key for key, value in id2pinAndNet1.items()}
+ net2id1 = {value[1]: key for key, value in id2pinAndNet1.items()}
+ g1 = newg1
+
 print("start golden simulation graph setup...")
 import cupy as cp
 temp_start = timer()
 #need to figure out and align the inputs and outputs for both graphs here. If something doesn't match I think the dictionary
 #translation will throw an error
-port2id0 = {value: key for key, value in id2port0.items()}
-driverPin2id0 = {tupleThing[0]: (index+num_of_top_ports0) for index, tupleThing in enumerate(id2pinAndNet0)}
-net2id0 = {tupleThing[1]: (index+num_of_top_ports0) for index, tupleThing in enumerate(id2pinAndNet0)}
-port2id1 = {value: key for key, value in id2port1.items()}
-driverPin2id1 = {tupleThing[0]: (index+num_of_top_ports1) for index, tupleThing in enumerate(id2pinAndNet1)}
-net2id1 = {tupleThing[1]: (index+num_of_top_ports1) for index, tupleThing in enumerate(id2pinAndNet1)}
+                                                          
+                                                                                                            
+                                                                                                      
+                                                          
+                                                                                                            
+                                                                                                      
 
 cycles32 = math.ceil(args.cycles/PARALLEL_CYCLES) * PARALLEL_CYCLES
 simLoops = int(cycles32/PARALLEL_CYCLES)
@@ -239,7 +278,7 @@ if len(listOfLoops0):
  loopsMaxIter0 = max( int(2 ** th.max(g0.ndata['loopsPresent'])), args.cycles )
  brokenEdgeSrc = [] ; brokenEdgeDst = [] ; brokenEdgeX = []
  for loop in listOfLoops0:
-  brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ;
+  brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ; 
  brokenEdgeSrc = th.LongTensor(brokenEdgeSrc) ; brokenEdgeDst = th.LongTensor(brokenEdgeDst) ; 
  oldLoopValues0 = cp.asarray(th.zeros( size=(participatingNodes0.size()[0],PARALLEL_CYCLES), dtype=th.uint8 ))
  brokenEdgeIDs = th.unique(g0.edge_ids(brokenEdgeSrc, brokenEdgeDst))
@@ -270,7 +309,7 @@ currentLogicValue = cp.asarray(th.zeros( size=(g0.nodes().shape[0],PARALLEL_CYCL
 #right now we don't use Unconnected outputs, currently using netname "UNCONNECTED" regex to do filtering
 outputs0 = outputs0.tolist() ; toRemove =[]
 for i in outputs0:
- netName = id2pinAndNet0[i-num_of_top_ports0][1] if i >= num_of_top_ports0 else id2port0[i]
+ netName = id2pinAndNet0[i][1]
  if re.search(r"^UNCONNECTED", netName):
   toRemove.append(i) ; continue;
  if len(listOfLoops0):
@@ -300,7 +339,7 @@ if len(listOfLoops1):
  loopsMaxIter1 = max( int(2 ** th.max(g1.ndata['loopsPresent'])), args.cycles )
  brokenEdgeSrc = [] ; brokenEdgeDst = [] ; brokenEdgeX = []
  for loop in listOfLoops1:
-  brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ;
+  brokenEdgeSrc.append(loop[-1]) ; brokenEdgeDst.append(loop[0]) ; 
  brokenEdgeSrc = th.LongTensor(brokenEdgeSrc) ; brokenEdgeDst = th.LongTensor(brokenEdgeDst) ; 
  oldLoopValues1 = cp.asarray(th.zeros( size=(participatingNodes1.size()[0],PARALLEL_CYCLES), dtype=th.uint8 ))
  brokenEdgeIDs = th.unique(g1.edge_ids(brokenEdgeSrc, brokenEdgeDst))
@@ -324,15 +363,15 @@ numOfInputNodes1 = len(inputNodes1)
 inputNodes1 = cp.asarray(inputNodes1)
 assert numOfInputNodes0 == numOfInputNodes1, "The two graphs don't have the same number of input nodes!"
 for i in range(numOfInputNodes0):
- thisID = int(inputNodes0[i]) ; thisNet = id2pinAndNet0[thisID-num_of_top_ports0][1] if thisID >= num_of_top_ports0 else id2port0[thisID] ; 
- alignedInput = port2id1[thisNet] if thisNet in port2id1.keys() else net2id1[thisNet] ;
+ thisID = int(inputNodes0[i]) ; thisNet = id2pinAndNet0[thisID][1] ; 
+ alignedInput = net2id1[thisNet] ;
  inputNodes1[i] = alignedInput
 
 outputs1= dgl.topological_nodes_generator(g1, reverse=True)[0]
 outputs1 = outputs1[ g1.in_degrees(outputs1) > 0 ]
 outputs1 = outputs1.tolist() ; toRemove =[]
 for i in outputs1:
- netName = id2pinAndNet1[i-num_of_top_ports1][1] if i >= num_of_top_ports1 else id2port1[i]
+ netName = id2pinAndNet1[i][1]
  if re.search(r"^UNCONNECTED", netName):
   toRemove.append(i); continue;
  if len(listOfLoops1):
@@ -349,8 +388,8 @@ if len(listOfLoops1):
 
 assert outputs1.shape[0] == outputs0.shape[0], "The two graphs don't have the same number of output nodes!"
 for i in range(outputs0.shape[0]):
- thisID = int(outputs0[i]) ; thisNet = id2pinAndNet0[thisID-num_of_top_ports0][1] if thisID >= num_of_top_ports0 else id2port0[thisID] ; 
- alignedOutput = port2id1[thisNet] if thisNet in port2id1.keys() else net2id1[thisNet] ;
+ thisID = int(outputs0[i]) ; thisNet = id2pinAndNet0[thisID][1] ; 
+ alignedOutput = net2id1[thisNet] ;
  outputs1[i] = alignedOutput
 
 exec(open('evalLogic.cupy').read())
@@ -360,8 +399,8 @@ nodesPerStage=[]; driversPerGate=[] ; edgeOffsets=[] ; drivers =[]; celltypes = 
 for logicStage in range(1,len(topo_nodes_cpu0)):
  theseNodes = topo_nodes_cpu0[logicStage]; 
  if len(listOfLoops0):
-  g0.ndata['logicLevel'][theseNodes] = logicStage
- theseDrivers, dummy =  g0.in_edges( theseNodes ) ;
+  g0.ndata['logicLevel'][theseNodes] = logicStage 
+ theseDrivers, dummy =  g0.in_edges( theseNodes ) ; 
  #this roundabout stuff is done to process the case of one driver driving multiple input pins of the same cell
  toTuple = [(int(theseDrivers[i]), int(dummy[i])) for i in range(theseDrivers.size()[0])] ; toTensor = th.LongTensor(list(set(toTuple)))
  dummy2, shuffleIndex = toTensor[:,1].sort() ; theseDrivers2 = toTensor[:,0][shuffleIndex] ; theseNodes2 = th.unique(dummy2) ;
@@ -435,7 +474,7 @@ print("Golden simulation for " + str(cycles32) + ' cycles done in ' + f"{temp_de
  A=[] ; B=[]; C=[] ; printA='' ; printB='' ;  printC='' ; 
  for i in range(31,-1,-1):
   aName = 'a' + '[' + str(i) + ']' ; bName = 'b' + '[' + str(i) + ']' ; cName = 'c' + '[' + str(i) + ']' ; 
-  bitIDa = port2id0[aName] ;  bitIDb = port2id0[bName] ;bitIDc = port2id0[cName] ;
+  bitIDa = net2id0[aName] ;  bitIDb = net2id0[bName] ;bitIDc = net2id0[cName] ;
   A.append(str(int(currentLogicValue[bitIDa,c]))) ; B.append(str(int(currentLogicValue[bitIDb,c]))) ; C.append(str(int(currentLogicValue[bitIDc,c]))) ; 
  A = "".join(A) ; B = "".join(B) ; C = "".join(C) ; 
  printA += 'a' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(A, base=2)))
@@ -450,7 +489,7 @@ mempool.free_all_blocks()
 
 nodesPerStage=[]; driversPerGate=[] ; edgeOffsets=[] ; drivers =[]; celltypes = []; pinPositions=[]
 for logicStage in range(1,len(topo_nodes_cpu1)):
- theseNodes = topo_nodes_cpu1[logicStage];
+ theseNodes = topo_nodes_cpu1[logicStage];  
  if len(listOfLoops1):
   g1.ndata['logicLevel'][theseNodes] = logicStage
  theseDrivers, dummy =  g1.in_edges( theseNodes ) ; 
@@ -531,7 +570,7 @@ print("Edited simulation for " + str(cycles32) + ' cycles done in ' + f"{temp_de
  A=[] ; B=[]; C=[] ; printA='' ; printB='' ;  printC='' ; 
  for i in range(31,-1,-1):
   aName = 'a' + '[' + str(i) + ']' ; bName = 'b' + '[' + str(i) + ']' ; cName = 'c' + '[' + str(i) + ']' ; 
-  bitIDa = port2id1[aName] ;  bitIDb = port2id1[bName] ;bitIDc = port2id1[cName] ;
+  bitIDa = net2id1[aName] ;  bitIDb = net2id1[bName] ;bitIDc = net2id1[cName] ;
   A.append(str(int(currentLogicValue[bitIDa,c]))) ; B.append(str(int(currentLogicValue[bitIDb,c]))) ; C.append(str(int(currentLogicValue[bitIDc,c]))) ; 
  A = "".join(A) ; B = "".join(B) ; C = "".join(C) ; 
  printA += 'a' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(A, base=2)))
@@ -548,13 +587,13 @@ else:
  wrongIDindex, cycle = cp.where(outputsTotal1!=outputsTotal0)
  wrongID = int(outputs0[wrongIDindex[0]]) ; cycle = int(cycle[0])
  sg, inverse_indices = dgl.khop_in_subgraph(g0, wrongID, k=len(topo_nodes_cpu0))
- wrongIDname = id2pinAndNet0[wrongID-num_of_top_ports0][0] if wrongID >= num_of_top_ports0 else id2port0[wrongID]
+ wrongIDname = id2pinAndNet0[wrongID][0]
  sgInputs = dgl.traversal.topological_nodes_generator(sg)[0]
  wrongInputIDs = sg.ndata['_ID'][sgInputs]
  print("output node " + wrongIDname + ' is incorrect. With inputs:') ; print_string = ''
  for i in wrongInputIDs:
   ii = int(i)
-  wrongInputName = id2pinAndNet0[ii-num_of_top_ports0][0] if ii >= num_of_top_ports0 else id2port0[ii]
+  wrongInputName = id2pinAndNet0[ii][0]
   inputIndex = int(cp.where(inputNodes0 == ii)[0]) ; wrongInputValue = int(inputsTotal[inputIndex,cycle]) ;
   print_string += wrongInputName + ' = ' + str(wrongInputValue) + '\t'
  print(print_string)
