@@ -1,0 +1,33 @@
+kernel_src_code = r'''
+#include <stdint.h>
+#include <iostream>
+#include <algorithm>
+#include <math.h>
+extern "C" __global__ void evalLogic( 
+uint8_t* currentLogicValue,
+const int* theseNodes,
+const int* theseCelltypes,
+const uint8_t* numDrivers,
+const int* theseDrivers,
+const uint8_t* thesePinPositions,
+const int64_t* theseEdgeOffsets,
+const uint8_t* out_array,
+uint32_t nodes_size, uint32_t PARALLEL_CYCLES) {
+const uint32_t threadID = blockIdx.x * blockDim.x + threadIdx.x ;
+const uint32_t x = threadIdx.x;
+const uint32_t y = blockIdx.y*blockDim.y + threadIdx.y;
+if ( y < nodes_size  ) {
+ int extracted_value; int thisDriver, pinWeight;  int gate_LUT_col=0; 
+ int64_t ref_begin=theseEdgeOffsets[y]; int64_t input_pins = int64_t(numDrivers[y]);
+ int thisNode = theseNodes[y];											   
+ for ( int64_t j=0; j< input_pins ; j++ ) {
+  thisDriver = theseDrivers[ref_begin + j] ; pinWeight = int(thesePinPositions[ref_begin + j]);
+  extracted_value  = int(currentLogicValue[thisDriver*PARALLEL_CYCLES + x]) ;
+  gate_LUT_col += extracted_value * int(1 << pinWeight) ;
+ }
+ currentLogicValue[thisNode*PARALLEL_CYCLES + x] = out_array[theseCelltypes[y] + gate_LUT_col] ;									   
+}
+}
+'''
+evalLogic=cp.RawKernel(kernel_src_code, 'evalLogic', backend='nvcc')
+evalLogic.compile() ;
