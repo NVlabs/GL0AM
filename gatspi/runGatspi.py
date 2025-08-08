@@ -1,38 +1,33 @@
-import gatspi4mlcad2025_contest_sim.gatspi4mlcad2025_contest_sim as gatspi4mlcad2025_contest_sim
+import gatspiLib.gatspiLib as gatspiLib
 import argparse
 
 def main():
  parser = argparse.ArgumentParser()
- parser.add_argument('--top_name', type=str, help = 'top module name')
- parser.add_argument('--graph0FilePath', type=str, help='raw csr graph file path, or stored DGL graph file path for golden netlist')
- parser.add_argument('--graph1FilePath', type=str, help='raw csr graph file path, or stored DGL graph file path for resynth netlist')
+ parser.add_argument('--topName', type=str, help = 'top module name')
+ parser.add_argument('--instanceName', type=str, default = 'uut', help = 'instance name in SAIF header')
+ parser.add_argument('--testname', type=str, help = 'test name, used in SAIF header')
+ parser.add_argument('--graphFilePath', type=str, help='raw csr graph file path, or stored DGL graph file path')
+ parser.add_argument('--inputTraceFile', type = str, help = 'path to the input trace file')
+ parser.add_argument('--duration', type = int, help = 'Duration of the test, in ps')
+ parser.add_argument('--period', type =int, help = 'clock period, in ps')
+ parser.add_argument('--numOfSubchunks', type = int, help = 'number of sub chunk divisions needed to get through the whole test, increase for longer tests or GPU buffer memory will overflow')
+ parser.add_argument('--waveformBufferSize', type = int, default=6000000000, help = 'Size, in units of 32bit words, of the waveform buffer. Can be larger for larger memory GPUs. Usually use 6000000000 for 24GB buffer')
  parser.add_argument('--dumpDGLGraph', type=bool, default=False, help='dump the created DGL graph or not. \
  Should be true and ran once when creating the DGL graph from raw CSR graph, from then on can be set to False to simply load the DGL graph')
  parser.add_argument('--createStdCellLibLUT', type=bool, default=False, help='compile the std cell library truth tables or not. should be run once for each new technology')
- parser.add_argument('--cycles', type=int, default=50000, help='target verification cycles to run')
- parser.add_argument('--parallel_sim_cycles', type=int, default=32, choices=[1,2,4,8,16,32,64,128,256], help='# of cycles to be simulated in parallel on GPU')
- parser.add_argument('--queryNetsListFile', type=str, default = '', help='path to file which houses a list of nets to compare. Expected file format is one net per line in file.')
+
  args = parser.parse_args()
- #args = parser.parse_args(['--top_name', 'adder', '--graph0FilePath', './adder.pkl', '--graph1FilePath', \
- #'./adder_altIncorrect.pkl', '--dumpDGLGraph', '1', '--queryNetsListFile', 'queryNets.lst'])
+ #args = args = parser.parse_args(['--topName', 'qadd_pipe', '--testname', 'testFlow', '--graphFilePath', \
+ #'../test.pkl', '--inputTraceFile', '../qadd_pipe.waveforms_part0', '--duration', '6000000', \
+ #'--period', '1000', '--numOfSubChunks', '1', '--dumpDGLGraph', '1','--createStdCellLibLUT', '1'])
  
- gatspiSim0 = gatspi4mlcad2025_contest_sim.gatspiSimulateAndCompareTool(topName = args.top_name, \
-  graph0FilePath = args.graph0FilePath, graph1FilePath = args.graph1FilePath, dumpDGLGraph = args.dumpDGLGraph, \
-  createStdCellLibLUT = args.createStdCellLibLUT, cycles = args.cycles, PARALLEL_CYCLES = args.parallel_sim_cycles, \
-  queryNetsListFile = args.queryNetsListFile )
+ gatspiSim0 = gatspiLib.GATSPI(topName = args.topName, instanceName = args.instanceName, \
+  graphFilePath = args.graphFilePath, testname = args.testname, inputTraceFile = args.inputTraceFile, \
+  testDuration =args.duration, period = args.period, numOfSubchunks = args.numOfSubchunks, \
+  waveformBufferSize = args.waveformBufferSize, dumpDGLGraph = args.dumpDGLGraph, createStdCellLibLUT = args.createStdCellLibLUT )
  
  gatspiSim0.doEverything()
- '''for c in range(args.parallel_sim_cycles):
-  A=[] ; B=[]; C=[] ; printA='' ; printB='' ;  printC='' ; 
-  for i in range(31,-1,-1):
-   aName = 'a' + '[' + str(i) + ']' ; bName = 'b' + '[' + str(i) + ']' ; cName = 'c' + '[' + str(i) + ']' ; 
-   bitIDa = gatspiSim0.net2id1[aName] ;  bitIDb = gatspiSim0.net2id1[bName] ;bitIDc = gatspiSim0.net2id1[cName] ;
-   A.append(str(int(gatspiSim0.currentLogicValue[bitIDa,c]))) ; B.append(str(int(gatspiSim0.currentLogicValue[bitIDb,c]))) ; C.append(str(int(gatspiSim0.currentLogicValue[bitIDc,c]))) ; 
-  A = "".join(A) ; B = "".join(B) ; C = "".join(C) ; 
-  printA += 'a' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(A, base=2)))
-  printB += 'b' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(B, base=2)))
-  printC += 'c' + '[' + str(31) + ':' + str(0) + ']' + " : " + str(hex(int(C, base=2)))
-  print(printA + ' ' + printB + ' : ' + printC)'''
 
 if __name__=="__main__":
  main()
+
