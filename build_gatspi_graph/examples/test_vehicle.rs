@@ -1,4 +1,4 @@
-use netlistdb::NetlistDB;
+use netlistdb::*;
 use std::env;
 use build_gatspi_graph::*;
 
@@ -21,7 +21,7 @@ fn main() {
     let db = NetlistDB::from_sverilog_file(
         &args[1],
         args.get(2).map(|x| x.as_ref()),
-        &build_gatspi_graph::StdCellPinDefs()
+        &build_gatspi_graph::stdlib_attributes::GL0AMGenericVlibStdCellPinDefs()
     ).expect("Error parsing the verilog into netlist");
 
     println!("Benchmark statistics for {}", args[1]);
@@ -35,7 +35,7 @@ fn main() {
 
 
     let time_build_gatspi = clilog::stimer!("build_gatspi");
-    let x = GATSPIGraph::build_graph(&db, &build_gatspi_graph::stdlib_attributes::MLCADDesignContest2025StdLib() );
+    let x = GATSPIGraph::build_graph(&db, &build_gatspi_graph::stdlib_attributes::GL0AMStdLib(), None);
     print_type(&x);
     clilog::finish!(time_build_gatspi);
     writeln!(&mut w, "GATSPI: {:?}", x).unwrap();
