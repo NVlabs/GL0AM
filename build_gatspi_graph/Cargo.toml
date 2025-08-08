@@ -14,6 +14,7 @@ compact_str = "0.7.1"
 indexmap = "2.4.0"
 itertools = "0.13.0"
 netlistdb = { version = "0.4.6", path = "../eda-infra-rs/netlistdb" }
+sdfparse = { path = "../sdfparse" }
 rand = "0.8.5"
 rand_chacha = "0.3.1"
 rayon = "1.10.0"
