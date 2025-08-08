@@ -1,0 +1,31 @@
+[package]
+name = "saif_dumper"
+version = "0.1.0"
+edition = "2024"
+description = "SAIF (Switching Activity Interchange Format) dumper"
+license = "Apache 2.0"
+
+[lib]
+name = "saif_dumper"
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "saif_dumper"
+path = "src/main.rs"
+
+[[example]]
+name = "test_parse_saif"
+path = "examples/test_parse_saif.rs"
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0.208", features = ["derive"] }
+rayon = "1.10.0"
+pyo3 = { version = "0.21", features = ["extension-module"] }
+chrono = { version = "0.4", features = ["serde"] }
+lazy_static = "1.4"
+regex = "1.5"
+clilog = { version = "0.2.5", path = "../eda-infra-rs/clilog" }
+
+[dev-dependencies]
+serde_json = "1.0" 

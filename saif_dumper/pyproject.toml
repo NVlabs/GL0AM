@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=1.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "saif_dumper"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+version = "0.1.0"
+description = "SAIF (Switching Activity Interchange Format) dumper"
+readme = "README.md"
+license = {text = "Apache 2.0"}
+authors = [
+    {name = "GATSPI Team", email = "team@gatspi.org"},
+]
+
