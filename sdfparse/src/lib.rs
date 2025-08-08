@@ -5,6 +5,9 @@ use regex::bytes::Regex;
 use lazy_static::lazy_static;
 use rayon::prelude::*;
 use memchr::memmem;
+lazy_static::lazy_static! {
+    static ref SEQ_REGEX: regex::Regex = regex::Regex::new(r".*(_DF|_LATCH_|_CLKGATE_|_RAMS_|_SYNC).*").unwrap();
+}
 
 #[derive(Debug,serde::Serialize)]
 pub struct sdfParse {
@@ -63,7 +66,7 @@ lazy_static! {
     static ref TIMESCALE_REGEX: Regex = Regex::new(r#"\(\s*TIMESCALE\s+(\d+)([munpf]s)"#).unwrap();
     static ref INTERCONNECT_BLOCKMODULE_REGEX: Regex = Regex::new(r#"\(INSTANCE "#).unwrap();
     static ref INTERCONNECT_REGEX: Regex = Regex::new(r#"\(\s*INTERCONNECT\s+(.*?)\s+(.*?)\s+(\(.*\))\s*\)"#).unwrap();
-    static ref CELL_REGEX: Regex = Regex::new(r#"(?s)\(CELLTYPE\s+"(.*?)"\s*\)\s+\(INSTANCE\s+(.*?)\s*\)\s+\(DELAY\s+\(ABSOLUTE\s+(.*?)\n\s+\)\n\s+\)"#).unwrap();
+    static ref CELL_REGEX: Regex = Regex::new(r#"(?s)\(CELLTYPE\s+"(.*?)"\s*\)\s+\(INSTANCE\s+(.*?)\s*\)\s+\(DELAY\s+(?:\(PATHPULSEPERCENT\s+\(\d+\s*\)\s*\)\s*)?\(ABSOLUTE\s+(.*?)\n\s+\)\n\s+\)"#).unwrap();
     static ref COND_DELAY_REGEX: regex::Regex = regex::Regex::new(r#"(?i)\s*\(COND\s+(.*?)\s+\(IOPATH\s+(.*?)\s*(\(\s*[0-9\)].*)"#).unwrap();
     static ref IOPATH_DELAY_REGEX: regex::Regex = regex::Regex::new(r#"(?i)\s*\(IOPATH\s+(.*?)\s*(\(\s*[0-9\)].*)"#).unwrap();
     static ref FLOAT_GROUP_REGEX: regex::Regex = regex::Regex::new(r#"\([^)]*\)"#).unwrap();
@@ -93,10 +96,23 @@ impl sdfParse {
   let firstCellResult = parseAllCellsResults.iter()
     .filter_map(|result| result.as_ref())
     .next();
+  let firstCellResultWithCond = parseAllCellsResults.iter()
+    .filter_map(|result| result.as_ref())
+    .find(|(_, _, parsed_results)| {
+      parsed_results.iter().any(|(cond, _, _, _)| cond.is_some())
+    });
+  let firstCellResultWithEdge = parseAllCellsResults.iter()
+    .filter_map(|result| result.as_ref())
+    .find(|(_, _, parsed_results)| {
+      parsed_results.iter().any(|(_, input_pin, _, _)| input_pin.contains("edge"))
+    });
   println!("Sample INTERCONNECT delay parsing result: {:?}", firstInterconnectResult);
   println!("Sample INSTANCE delay parsing result: {:?}", firstCellResult);
+  println!("Sample INSTANCE delay parsing result with COND: {:?}", firstCellResultWithCond);
+  println!("Sample INSTANCE delay parsing result with 'edge' in input pin: {:?}", firstCellResultWithEdge);
   println!("Total interconnect results: {}", parseInterconnectResults.iter().filter_map(|r| r.as_ref()).count());
   println!("Total cell results: {}", parseAllCellsResults.iter().filter_map(|r| r.as_ref()).count());
+  println!("Filtered out sequential cells (None results): {}", parseAllCellsResults.iter().filter(|r| r.is_none()).count());
   Self { 
    designName: designName, timeUnit: timeUnit, parseInterconnectResults: parseInterconnectResults, parseAllCellsResults: parseAllCellsResults,
   }
@@ -257,6 +273,12 @@ impl sdfParse {
   if let Some(captured) = CELL_REGEX.captures(chunk) {
    let celltype = captured.get(1)? ; let instance = captured.get(2)?; let delay = captured.get(3)?;
    let celltype_str = std::str::from_utf8(celltype.as_bytes()).ok()?.to_string(); 
+   
+   // Check if celltype_str matches SEQ_REGEX, return None if it does
+   if SEQ_REGEX.is_match(&celltype_str) {
+    return None;
+   }
+   
    let instance_str = std::str::from_utf8(instance.as_bytes()).ok()?.to_string();
    let delay_str = std::str::from_utf8(delay.as_bytes()).ok()?;
    // Parse delay_str line by line
