@@ -1,0 +1,374 @@
+kernel_src_code = r'''
+#include <iostream>
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <vector>
+#include <stdio.h>
+#include <math.h>
+#include <float.h>
+#include <tuple>
+#include <iostream>
+#include <algorithm>
+#include <cstdlib>
+extern "C" __global__ void determineSplitWaveformSizes( 
+ const int64_t* concatenated_input_waveforms,
+ const int64_t* input_waveform_length_start_pointers,
+ const int64_t* input_waveform_length_end_pointers,
+ int64_t* split_waveform_lengths,
+ int subchunk_id, int num_splits, int end_token, int fold_split, int num_of_nodes) {
+ const int i = blockIdx.y * blockDim.y + threadIdx.y ;
+ const int k = threadIdx.x;
+ //1 GPU thread per node/cell_ID + split
+ if ( i < num_of_nodes && k < num_splits  ) {
+  int64_t this_split_waveform_length =0;
+  int j = num_splits * subchunk_id + k;
+  int64_t start_window; int64_t end_window;
+  int64_t marker = input_waveform_length_start_pointers[i];
+  bool init_val=1;
+  if ( j == 0 ) {
+   start_window = 0 ; end_window = int64_t(fold_split);
+   while ( concatenated_input_waveforms[marker] < end_window && marker < input_waveform_length_end_pointers[i] ) {
+    this_split_waveform_length++; marker++;
+   }
+   this_split_waveform_length++; //add an end_token to the end
+   this_split_waveform_length = ( this_split_waveform_length % 2 ) ? (this_split_waveform_length+1) : this_split_waveform_length ;
+  } else {
+   start_window = int64_t(fold_split) * int64_t(j); end_window = start_window + int64_t(fold_split);
+   while ( concatenated_input_waveforms[marker] < end_window && marker < input_waveform_length_end_pointers[i] ) {
+    if ( concatenated_input_waveforms[marker] < start_window ) {
+     init_val = init_val ? 0 : 1 ;
+    } else {
+     this_split_waveform_length++;
+    }
+    marker++;
+   }
+   this_split_waveform_length = init_val ? (this_split_waveform_length + 2) : (this_split_waveform_length + 1); //insert init val 0 or 1
+   this_split_waveform_length++; //add an end_token to the end
+   this_split_waveform_length = ( this_split_waveform_length % 2 ) ? (this_split_waveform_length+1) : this_split_waveform_length ;      
+  }
+  split_waveform_lengths[i*num_splits + k] =  this_split_waveform_length;
+  }
+}
+'''
+determineSplitWaveformSizes=cp.RawKernel(kernel_src_code, 'determineSplitWaveformSizes', backend='nvcc')
+determineSplitWaveformSizes.compile() ;
+
+kernel_src_code = r'''
+#include <iostream>
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <vector>
+#include <stdio.h>
+#include <math.h>
+#include <float.h>
+#include <tuple>
+#include <algorithm>
+#include <cstdlib>
+
+extern "C" __global__ void reorganizeWaveform(
+ const int64_t* concatenated_input_waveforms,
+ const int64_t* input_waveform_length_start_pointers,
+ const int64_t* input_waveform_length_end_pointers,
+ const int64_t* split_waveform_start_pointers,
+ int* organized_waveforms,
+ int subchunk_id, int num_splits, int end_token, int fold_split, int num_of_nodes) {
+ const int i = blockIdx.y * blockDim.y + threadIdx.y ;
+ const int k = threadIdx.x;
+ //1 GPU thread per node/cell_ID and split
+ if ( i < num_of_nodes && k < num_splits  ) {
+  int64_t this_waveform_pointer = split_waveform_start_pointers[i*num_splits + k];
+  int j = num_splits * subchunk_id + k;
+  int64_t start_window; int64_t end_window;
+  int64_t marker = input_waveform_length_start_pointers[i];
+  bool init_val=1; bool init_value_processed = 0;
+  if ( j == 0 ) {
+   start_window = 0 ; end_window = int64_t(fold_split);
+   while ( concatenated_input_waveforms[marker] < end_window && marker < input_waveform_length_end_pointers[i] ) {
+    organized_waveforms[this_waveform_pointer] = int(concatenated_input_waveforms[marker]) ;
+    marker++; this_waveform_pointer++;
+   }
+  } else {
+   start_window = int64_t(fold_split) * int64_t(j); end_window = start_window + int64_t(fold_split);
+   while ( concatenated_input_waveforms[marker] < end_window && marker < input_waveform_length_end_pointers[i] ) {
+    if ( concatenated_input_waveforms[marker] < start_window ) {
+     init_val = init_val ? 0 : 1 ;
+    } else {
+     if ( !init_value_processed ) { //process the init value first
+      init_value_processed = 1;
+      if ( init_val ) { // process a 1
+       organized_waveforms[this_waveform_pointer] = -1 ; this_waveform_pointer++;
+       organized_waveforms[this_waveform_pointer] = 0 ; this_waveform_pointer++;
+      } else { //process a 0
+       organized_waveforms[this_waveform_pointer] = 0 ; this_waveform_pointer++;
+      }
+     }
+     organized_waveforms[this_waveform_pointer] = int( concatenated_input_waveforms[marker] - int64_t(fold_split) * int64_t(j) ) ;
+     this_waveform_pointer++;
+    }
+    marker++;
+   }
+   if ( !init_value_processed ) { //if the signal is static for this window
+    init_value_processed = 1;
+    if ( init_val ) { // process a 1
+     organized_waveforms[this_waveform_pointer] = -1 ; this_waveform_pointer++;
+     organized_waveforms[this_waveform_pointer] = 0 ; this_waveform_pointer++;
+    } else { //process a 0
+     organized_waveforms[this_waveform_pointer] = 0 ; this_waveform_pointer++;
+    }
+   }
+  }
+ }
+}  
+'''
+reorganizeWaveform=cp.RawKernel(kernel_src_code, 'reorganizeWaveform', backend='nvcc')
+reorganizeWaveform.compile() ;     
+
+kernel_src_code = r'''
+#include <iostream>
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <vector>
+#include <stdio.h>
+#include <math.h>
+#include <float.h>
+#include <tuple>
+#include <algorithm>
+#include <cstdlib>
+
+extern "C" {
+
+#define RISE_DELAY(x) (x & 0xFFFF0000) >> 16
+#define FALL_DELAY(x) (x & 0x0000FFFF)
+
+__global__ void simulateGateTC(
+ const int* stage_waveforms,
+ const int* full_delays,
+ const uint8_t* logics,
+ const uint8_t* in_degs,
+ const int* net_delays,
+ const uint8_t* pin_positions,
+ const int64_t* delay_pointer_start,
+ const int64_t* delay_pointer_end,
+ const int* theseCelltypes,
+ const int* theseEdgeOffsets,
+ int64_t* pointers,
+ int* init_vals,
+ int* output_TC,
+ size_t nodes_size, size_t num_splits, size_t end_token) {
+ const int i = blockIdx.x * blockDim.y + threadIdx.y ;
+ const int k = threadIdx.x ;
+ if ( i < nodes_size && k < num_splits  ) {
+  int gate_LUT_col=0; int SDF_split ; int ref_begin = theseEdgeOffsets[i] ;
+  for ( int j=0; j< int(in_degs[i]) ; j++ ) {
+   if (stage_waveforms[pointers[(ref_begin+j)*num_splits + k]] == -1 ) {
+    pointers[(ref_begin+j)*num_splits + k] += 1;
+   }
+   gate_LUT_col += ( (pointers[(ref_begin+j)*num_splits + k]) % 2)  * ( pow(2, int(pin_positions[ref_begin + j]) ) ) ;
+  }
+  int init_val = int(logics[theseCelltypes[i] + gate_LUT_col]) ; int init_time = 0; int init_time2= 0;
+  init_vals[i*num_splits + k] = init_val;
+  int trans_time = 0; int y; int delay_used; int output_trans_time; int net_delay = 0; int net_delay_other = 0;
+  while (trans_time != end_token) {
+   trans_time = end_token; 
+   for (int j =0; j < int(in_degs[i]) ; j++ ) {
+    net_delay = ( pointers[(ref_begin+j)*num_splits + k] % 2 ) ? FALL_DELAY(net_delays[ref_begin+j]) : RISE_DELAY(net_delays[ref_begin+j]) ;
+    net_delay_other = ( pointers[(ref_begin+j)*num_splits + k] % 2 ) ? RISE_DELAY(net_delays[ref_begin+j]) : FALL_DELAY(net_delays[ref_begin+j]) ;
+    //add proc to check if the interconnect does "BUFFER" inertial delay filtering
+    if ( (stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+1]) < int(end_token) ) {
+     if ( (stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+2])+net_delay_other-net_delay-(stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+1]) < net_delay_other ) {
+      pointers[(ref_begin+j)*num_splits + k] += 2;
+      j=-1 ; continue;
+     }
+    }
+    trans_time = min( trans_time, ( stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+1] + net_delay ) ) ;
+   }
+   if (trans_time != end_token) {
+    int delay_used_rise = 0x0000FFFF; int delay_used_fall = 0x0000FFFF; int pin_value =0 ;
+    gate_LUT_col=0;
+    for (int j =0 ; j < int(in_degs[i]) ; j++) {
+     net_delay = ( pointers[(ref_begin+j)*num_splits + k] % 2 ) ? FALL_DELAY(net_delays[ref_begin+j]) : RISE_DELAY(net_delays[ref_begin+j]) ;
+     pin_value = ( (stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+1] + net_delay) == trans_time ) ? ( (pointers[(ref_begin+j)*num_splits + k]+1) % 2 ) : ( (pointers[(ref_begin+j)*num_splits + k]) % 2 ) ;
+     gate_LUT_col += ( pin_value ) * ( pow(2, int(pin_positions[ref_begin + j]) ) ) ;
+    }
+    for (int j = 0 ; j < int(in_degs[i]) ; j++ ) {
+     net_delay = ( pointers[(ref_begin+j)*num_splits + k] % 2 ) ? FALL_DELAY(net_delays[ref_begin+j]) : RISE_DELAY(net_delays[ref_begin+j]) ;
+     if ( (stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+1] + net_delay) == trans_time ) {
+      pointers[(ref_begin+j)*num_splits + k] +=1; SDF_split = ( delay_pointer_end[ref_begin+j] - delay_pointer_start[ref_begin+j] )/2 ;
+      if ( ( (pointers[(ref_begin+j)*num_splits + k]) % 2) == 0 ) {
+       delay_used_rise = min( delay_used_rise, RISE_DELAY(full_delays[ delay_pointer_start[ref_begin+j] + SDF_split + gate_LUT_col ] ) ) ;
+       delay_used_fall = min( delay_used_fall, FALL_DELAY(full_delays[ delay_pointer_start[ref_begin+j] + SDF_split + gate_LUT_col ] ) ) ;
+      } else {
+       delay_used_rise = min( delay_used_rise, RISE_DELAY(full_delays[ delay_pointer_start[ref_begin+j] + gate_LUT_col ] ) ) ;
+       delay_used_fall = min( delay_used_fall, FALL_DELAY(full_delays[ delay_pointer_start[ref_begin+j] + gate_LUT_col ] ) ) ;
+      }
+     }
+    }
+    y = int(logics[theseCelltypes[i] + gate_LUT_col]);
+    if ( ((y == 0 ) && (delay_used_fall != 0x0000FFFF) && (init_val == 1)) || ((y == 1 ) && (delay_used_rise != 0x0000FFFF) && (init_val == 0)) ) {
+     if (init_val == 0) {
+      delay_used = delay_used_rise; init_val = 1;
+     } else {
+      delay_used = delay_used_fall; init_val = 0;
+     }
+     output_trans_time = trans_time + delay_used;
+     if ( (output_trans_time - init_time) < delay_used ) {
+      output_TC[i*num_splits+k] -= 1; init_time = init_time2;
+     } else {
+      output_TC[i*num_splits+k] += 1; init_time2 = init_time ; init_time = output_trans_time;
+     }
+    }
+   }
+  }
+ }
+}
+}
+'''
+simulateGateTC=cp.RawKernel(kernel_src_code, 'simulateGateTC', backend='nvcc')
+simulateGateTC.compile() ;
+
+kernel_src_code = r'''
+#include <iostream>
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <vector>
+#include <stdio.h>
+#include <math.h>
+#include <float.h>
+#include <tuple>
+#include <algorithm>
+#include <cstdlib>
+
+extern "C" {
+
+#define RISE_DELAY(x) (x & 0xFFFF0000) >> 16
+#define FALL_DELAY(x) (x & 0x0000FFFF)
+
+__global__ void simulateGateWaveforms(
+ int* stage_waveforms,
+ const int* full_delays,
+ const uint8_t* logics,
+ const uint8_t* in_degs,
+ const int* net_delays,
+ const uint8_t* pin_positions,
+ const int64_t* delay_pointer_start,
+ const int64_t* delay_pointer_end,
+ const int* theseCelltypes,
+ const int* theseEdgeOffsets,
+ int64_t* pointers,
+ int64_t* output_pointers,
+ size_t nodes_size, size_t num_splits, size_t end_token) {
+ const int i = blockIdx.x * blockDim.y + threadIdx.y ;
+ const int k = threadIdx.x ;
+ if ( i < nodes_size && k < num_splits  ) {
+  int gate_LUT_col=0; int64_t output_p; int SDF_split ; int ref_begin = theseEdgeOffsets[i] ;
+  output_p = output_pointers[i*num_splits + k ];
+  for ( int j=0; j< int(in_degs[i]) ; j++ ) {
+   if (stage_waveforms[pointers[(ref_begin+j)*num_splits + k]] == -1 ) {
+    pointers[(ref_begin+j)*num_splits + k] += 1;
+   }
+   gate_LUT_col += ( (pointers[(ref_begin+j)*num_splits + k]) % 2)  * ( pow(2, int(pin_positions[ref_begin + j]) ) ) ;
+  }
+  int y = int(logics[theseCelltypes[i] + gate_LUT_col]) ;
+  if ( y == 0 ) { stage_waveforms[output_p] = 0; } else { stage_waveforms[output_p] = -1 ; output_p++; stage_waveforms[output_p] = 0; }
+  int trans_time = 0; int delay_used; int output_trans_time; int net_delay = 0; int net_delay_other = 0;
+  while (trans_time != end_token) {
+   trans_time = end_token; 
+   for (int j =0; j < int(in_degs[i]) ; j++ ) {
+    net_delay = ( pointers[(ref_begin+j)*num_splits + k] % 2 ) ? FALL_DELAY(net_delays[ref_begin+j]) : RISE_DELAY(net_delays[ref_begin+j]) ;
+    net_delay_other = ( pointers[(ref_begin+j)*num_splits + k] % 2 ) ? RISE_DELAY(net_delays[ref_begin+j]) : FALL_DELAY(net_delays[ref_begin+j]) ;
+    //add proc to check if the interconnect does "BUFFER" inertial delay filtering
+    if ( (stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+1]) < int(end_token) ) {
+     if ( (stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+2])+net_delay_other-net_delay-(stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+1]) < net_delay_other ) {
+      pointers[(ref_begin+j)*num_splits + k] += 2;
+      j=-1 ; continue;
+     }
+    }
+    trans_time = min( trans_time, ( stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+1] + net_delay ) ) ;
+   }
+   if (trans_time != end_token) {
+    int delay_used_rise = 0x0000FFFF; int delay_used_fall = 0x0000FFFF; int pin_value =0 ;
+    gate_LUT_col=0;
+    for (int j =0 ; j < int(in_degs[i]) ; j++) {
+     net_delay = ( pointers[(ref_begin+j)*num_splits + k] % 2 ) ? FALL_DELAY(net_delays[ref_begin+j]) : RISE_DELAY(net_delays[ref_begin+j]) ;
+     pin_value = ( (stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+1] + net_delay) == trans_time ) ? ( (pointers[(ref_begin+j)*num_splits + k]+1) % 2 ) : ( (pointers[(ref_begin+j)*num_splits + k]) % 2 ) ;
+     gate_LUT_col += ( pin_value ) * ( pow(2, int(pin_positions[ref_begin + j]) ) ) ;
+    }
+    for (int j = 0 ; j < int(in_degs[i]) ; j++ ) {
+     net_delay = ( pointers[(ref_begin+j)*num_splits + k] % 2 ) ? FALL_DELAY(net_delays[ref_begin+j]) : RISE_DELAY(net_delays[ref_begin+j]) ;
+     if ( (stage_waveforms[pointers[(ref_begin+j)*num_splits + k]+1] + net_delay) == trans_time ) {
+      pointers[(ref_begin+j)*num_splits + k] +=1; SDF_split = ( delay_pointer_end[ref_begin+j] - delay_pointer_start[ref_begin+j] )/2 ;
+      if ( ( (pointers[(ref_begin+j)*num_splits + k]) % 2) == 0 ) {
+       delay_used_rise = min( delay_used_rise, RISE_DELAY(full_delays[ delay_pointer_start[ref_begin+j] + SDF_split + gate_LUT_col ] ) ) ;
+       delay_used_fall = min( delay_used_fall, FALL_DELAY(full_delays[ delay_pointer_start[ref_begin+j] + SDF_split + gate_LUT_col ] ) ) ;
+      } else {
+       delay_used_rise = min( delay_used_rise, RISE_DELAY(full_delays[ delay_pointer_start[ref_begin+j] + gate_LUT_col ] ) ) ;
+       delay_used_fall = min( delay_used_fall, FALL_DELAY(full_delays[ delay_pointer_start[ref_begin+j] + gate_LUT_col ] ) ) ;
+      }
+     }
+    }
+    y = int(logics[theseCelltypes[i] + gate_LUT_col]);
+    if ( ( (y == 0) && (delay_used_fall != 0x0000FFFF) && ((output_p%2) == 1) ) || ( (y ==1) && (delay_used_rise != 0x0000FFFF) && ((output_p%2)==0) ) ) {
+     if ( (output_p%2) == 0 ) {
+      delay_used = delay_used_rise;
+     } else {
+      delay_used = delay_used_fall;
+     }
+     output_trans_time = trans_time + delay_used;
+     if ( (output_trans_time - stage_waveforms[output_p]) < delay_used ) {
+      output_p--;
+     } else {
+      output_p++; stage_waveforms[output_p] = output_trans_time;
+     }
+    }
+   }
+  }
+  stage_waveforms[output_p + 1] = end_token;
+  output_pointers[i*num_splits + k] = output_p ;  
+ }
+}
+}
+'''
+simulateGateWaveforms=cp.RawKernel(kernel_src_code, 'simulateGateWaveforms', backend='nvcc')
+simulateGateWaveforms.compile() ;
+
+kernel_src_code = r'''
+#include <stdint.h>
+#include <iostream>
+#include <algorithm>
+#include <math.h>
+
+extern "C" {
+
+#define LOGIC_VALUE(x) (x % 2)
+
+extern "C" __global__ void calculateSAIF( 
+ const int* new_waveforms_total,
+ const int64_t* perNodePerSplitWaveformPointerStart,
+ const int64_t* perNodePerSplitWaveformPointerEnd,
+ uint64_t* T0s,
+ uint32_t* TCs,
+ const int num_splits, const int num_nodes, const int fold_split, const uint64_t subchunk_duration, const int subchunk_id, const int end_token) {
+ const int i = blockIdx.x * blockDim.y + threadIdx.y ;
+ const int k = threadIdx.x ;
+ if ( i < num_nodes  ) {
+  uint64_t endOfSplit;
+  int64_t thisGATSPIPointerStart = perNodePerSplitWaveformPointerStart[i*num_splits+k];
+  int64_t thisGATSPIPointerEnd = perNodePerSplitWaveformPointerEnd[i*num_splits+k];
+  endOfSplit = uint64_t(k*fold_split) > subchunk_duration ? 0 : min(subchunk_duration - uint64_t(k*fold_split), uint64_t(fold_split) );
+  uint32_t TC = uint32_t(thisGATSPIPointerEnd - thisGATSPIPointerStart) - 2 ;
+  if (new_waveforms_total[thisGATSPIPointerStart] == -1) { TC--; thisGATSPIPointerStart+=2; }
+  if (new_waveforms_total[thisGATSPIPointerEnd-2] == end_token) {TC--;}
+  TCs[i*num_splits+k] = TC;
+  uint64_t T0 = 0; uint64_t T0_end_time, T0_start_time ; 
+  for (int64_t j = thisGATSPIPointerStart ; j < thisGATSPIPointerEnd - 1 ; j += 2 ) {
+   T0_end_time = (new_waveforms_total[j+1] == end_token) ? endOfSplit : uint64_t(new_waveforms_total[j+1]) ;
+   T0_start_time = (new_waveforms_total[j] == end_token) ? endOfSplit : uint64_t(new_waveforms_total[j]) ;
+   T0 += T0_end_time - T0_start_time;
+  }
+  T0s[i*num_splits+k] = T0;
+ }
+}
+}
+'''
+calculateSAIF=cp.RawKernel(kernel_src_code, 'calculateSAIF', backend='nvcc')
+calculateSAIF.compile() ;
