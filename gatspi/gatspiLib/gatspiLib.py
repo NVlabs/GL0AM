@@ -317,14 +317,14 @@ class GATSPI:
   input_w=cp.asarray(input_w)
   split_waveform_lengths = cp.zeros( (node_nums.size()[0], self.PARALLEL_CYCLES) , dtype=cp.int64 );
   cudaBlockY = math.ceil(128/self.PARALLEL_CYCLES) ;
-  determineSplitWaveformSizes( (1,math.ceil(node_nums.size()[0]/cudaBlockY)), (self.PARALLEL_CYCLES,cudaBlockY),\
+  determineSplitWaveformSizes( (math.ceil(node_nums.size()[0]/cudaBlockY),1), (self.PARALLEL_CYCLES,cudaBlockY),\
    (input_w,input_waveform_length_start_pointers,input_waveform_length_end_pointers,split_waveform_lengths,\
    subchunkID,self.PARALLEL_CYCLES,self.END_TOKEN,self.fold_split,node_nums.size()[0]) ) 
   split_waveform_lengths = cp.roll(cp.cumsum(split_waveform_lengths.reshape(-1)), 1, 0)
   organized_waveforms_size = int(split_waveform_lengths[0].repeat(1)) ; split_waveform_lengths[0] = 0;
   split_waveform_lengths = split_waveform_lengths.reshape(-1,self.PARALLEL_CYCLES)
   organized_waveforms = cp.full( organized_waveforms_size, self.END_TOKEN, dtype=cp.int32)
-  reorganizeWaveform( (1,math.ceil(node_nums.size()[0]/cudaBlockY)), (self.PARALLEL_CYCLES,cudaBlockY),\
+  reorganizeWaveform( (math.ceil(node_nums.size()[0]/cudaBlockY),1), (self.PARALLEL_CYCLES,cudaBlockY),\
    (input_w,input_waveform_length_start_pointers,input_waveform_length_end_pointers,split_waveform_lengths,organized_waveforms,\
    subchunkID,self.PARALLEL_CYCLES,self.END_TOKEN,self.fold_split,node_nums.size()[0]) ) 
   organized_waveforms = cp.concatenate((cp.asarray( [0,self.END_TOKEN] * self.PARALLEL_CYCLES ).astype(cp.int32), organized_waveforms ))
@@ -457,7 +457,3 @@ class GATSPI:
   self.simAllSubchunks(node_nums,input_w,input_waveform_length_start_pointers,input_waveform_length_end_pointers,\
   nodesPerStage,driversPerGate,edgeOffsets,drivers,celltypes,pinPositions,netDelays,delayPointersStart,delayPointersEnd) 
   self.dumpSAIF()
-
-
-
-

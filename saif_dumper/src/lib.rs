@@ -10,7 +10,64 @@ use chrono::Utc;
 use pyo3::prelude::*;
 use lazy_static::lazy_static;
 use regex::Regex;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator, IntoParallelIterator};
+use memchr::memmem;
+
+/// Find NET entry positions in parallel using multiple threads
+fn findNetEntryPositions(data: &[u8]) -> Vec<usize> {
+    let delimiter = b" (";
+    let max_threads = rayon::current_num_threads();
+    let chunk_size = (data.len() + max_threads - 1) / max_threads;
+    let delimiter_len = delimiter.len();
+    
+    // Calculate how many threads we actually need, ensuring start < data.len()
+    let mut num_threads = (data.len() + chunk_size - 1) / chunk_size;
+    num_threads = num_threads.min(max_threads);
+    
+    // Parallel search for delimiters
+    let mut positions: Vec<usize> = (0..num_threads).into_par_iter().flat_map(|i| {
+        let start = i * chunk_size;
+        let mut end = ((i + 1) * chunk_size).min(data.len());
+        
+        // extend to avoid splitting a delimiter
+        if end + delimiter_len < data.len() {
+            end += delimiter_len;
+        }
+        
+        // Ensure end doesn't exceed data bounds
+        let end = end.min(data.len());
+        let slice = &data[start..end];
+        memmem::find_iter(slice, delimiter).map(|pos| start + pos).collect::<Vec<_>>()
+    }).collect();
+    
+    // Filter out false positives after collecting results
+    let mut filtered_positions = Vec::new();
+    for &pos in &positions {
+        // Check if this position actually starts a NET entry by looking ahead
+        // Use the length of the longest false positive pattern to determine look_ahead size
+        let max_false_positive_len = 12; // " (INSTANCE " is 12 characters
+        
+        if pos + max_false_positive_len < data.len() {
+            let look_ahead = &data[pos..pos + max_false_positive_len];
+            // Only keep if it's NOT one of the false positive cases
+            if !look_ahead.starts_with(b" (INSTANCE ") && 
+               !look_ahead.starts_with(b" (NET\n") &&
+               !look_ahead.starts_with(b" (T0 ") && 
+               !look_ahead.starts_with(b" (T1 ") && 
+               !look_ahead.starts_with(b" (TX ") && 
+               !look_ahead.starts_with(b" (TC ") && 
+               !look_ahead.starts_with(b" (IG ") {
+                filtered_positions.push(pos);
+            }
+        }
+    }
+    
+    // Results may be out of order due to thread execution order
+    // Sort after filtering to sort fewer elements
+    filtered_positions.sort_unstable();
+    
+    filtered_positions
+}
 
 /// SAIF structure for storing parsed SAIF file information
 pub struct SaifStruct {
@@ -128,49 +185,91 @@ fn saifEscapedString(string: &str) -> String {
   // Parse NET entries from the rest of the file in parallel
   let net_section = &contents[header_end..];
   
-  // Collect all regex captures first
-  let captures: Vec<_> = SAIF_ENTRY_REGEX.captures_iter(net_section).collect();
   
-  // Process captures in parallel
-  let saif_dict: HashMap<String, (i64, i64, i64, i32)> = captures.par_iter()
-   .map(|cap| {
-    let net_name = cap[1].to_string();
-    
-    // Parse T0
-    let t0_raw = cap[2].parse::<f64>()
-     .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, 
-      format!("Could not parse T0 value '{}' as float", cap[2].to_string())))?;
-    
-    // Parse T1
-    let t1_raw = cap[3].parse::<f64>()
-     .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, 
-      format!("Could not parse T1 value '{}' as float", cap[3].to_string())))?;
-    
-    // Parse TX (optional - default to 0 if not present)
-    let tx_raw = if cap.get(4).is_some() {
-     cap[4].parse::<f64>()
-      .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, 
-       format!("Could not parse TX value '{}' as float", cap[4].to_string())))?
-    } else {
-     0.0 // Default TX time if not present
-    };
-    
-    // Parse TC
-    let tc_raw = cap[5].parse::<i32>()
-     .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, 
-      format!("Could not parse TC value '{}' as integer", cap[5].to_string())))?;
-    
-    // Apply timescale normalization to T0, T1, and TX
-    let this_t0 = (t0_raw * timescale) as i64;
-    let this_t1 = (t1_raw * timescale) as i64;
-    let this_tx = (tx_raw * timescale) as i64;
-    let this_tc = tc_raw;
-    
-    Ok((net_name, (this_t0, this_t1, this_tx, this_tc)))
-   })
-   .collect::<Result<Vec<_>, std::io::Error>>()?
-   .into_iter()
-   .collect();
+  // Find NET entry positions in parallel
+  let newNetEntryPositions = findNetEntryPositions(net_section.as_bytes());
+  
+
+  
+  // Create chunks for parallel processing
+  let mut chunks: Vec<&str> = Vec::with_capacity(newNetEntryPositions.len());
+  for i in 0..newNetEntryPositions.len() {
+      if i == newNetEntryPositions.len() - 1 {
+          // Last chunk: from this position to the end of the file
+          chunks.push(&net_section[newNetEntryPositions[i]..]);
+      } else {
+          // Chunks: from this position to the next position
+          chunks.push(&net_section[newNetEntryPositions[i]..newNetEntryPositions[i + 1]]);
+      }
+  }
+  
+  // Process chunks in parallel using regex and create saif_dict
+  let parse_results: Vec<Result<Option<Vec<(String, (i64, i64, i64, i32))>>, std::io::Error>> = chunks
+      .par_iter()
+      .map(|chunk| {
+          // Use regex to capture SAIF entry data from each chunk
+          let mut chunk_results = Vec::new();
+          let mut has_successful_captures = false;
+          
+          // Use regex to capture SAIF entry data from each chunk
+          let captures: Vec<_> = SAIF_ENTRY_REGEX.captures_iter(chunk).collect();
+          
+          for cap in captures {
+              has_successful_captures = true;
+              let net_name = cap[1].to_string();
+              
+              // Parse T0
+              let t0_raw = cap[2].parse::<f64>()
+                  .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, 
+                      format!("Could not parse T0 value '{}' as float", cap[2].to_string())))?;
+              
+              // Parse T1
+              let t1_raw = cap[3].parse::<f64>()
+                  .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, 
+                      format!("Could not parse T1 value '{}' as float", cap[3].to_string())))?;
+              
+              // Parse TX (optional - default to 0 if not present)
+              let tx_raw = if cap.get(4).is_some() {
+                  cap[4].parse::<f64>()
+                      .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, 
+                      format!("Could not parse TX value '{}' as float", cap[4].to_string())))?
+              } else {
+                  0.0 // Default TX time if not present
+              };
+              
+              // Parse TC
+              let tc_raw = cap[5].parse::<i32>()
+                  .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, 
+                      format!("Could not parse TC value '{}' as integer", cap[5].to_string())))?;
+              
+              // Apply timescale normalization to T0, T1, and TX
+              let this_t0 = (t0_raw * timescale) as i64;
+              let this_t1 = (t1_raw * timescale) as i64;
+              let this_tx = (tx_raw * timescale) as i64;
+              let this_tc = tc_raw;
+              
+              chunk_results.push((net_name, (this_t0, this_t1, this_tx, this_tc)));
+          }
+          
+          // Return Some(chunk_results) if we had successful captures, None otherwise
+          if has_successful_captures {
+              Ok(Some(chunk_results))
+          } else {
+              Ok(None)
+          }
+      })
+      .collect();
+  
+  // Collect all results into the final HashMap, filtering out None results
+  let saif_dict: HashMap<String, (i64, i64, i64, i32)> = parse_results
+      .into_iter()
+      .collect::<Result<Vec<_>, std::io::Error>>()?
+      .into_iter()
+      .filter_map(|opt| opt) // Filter out None results
+      .flatten()
+      .collect();
+  
+
   
   let result = SaifStruct {
    timescale,

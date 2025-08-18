@@ -16,7 +16,7 @@ extern "C" __global__ void determineSplitWaveformSizes(
  const int64_t* input_waveform_length_end_pointers,
  int64_t* split_waveform_lengths,
  int subchunk_id, int num_splits, int end_token, int fold_split, int num_of_nodes) {
- const int i = blockIdx.y * blockDim.y + threadIdx.y ;
+ const int i = blockIdx.x * blockDim.y + threadIdx.y ;
  const int k = threadIdx.x;
  //1 GPU thread per node/cell_ID + split
  if ( i < num_of_nodes && k < num_splits  ) {
@@ -72,7 +72,7 @@ extern "C" __global__ void reorganizeWaveform(
  const int64_t* split_waveform_start_pointers,
  int* organized_waveforms,
  int subchunk_id, int num_splits, int end_token, int fold_split, int num_of_nodes) {
- const int i = blockIdx.y * blockDim.y + threadIdx.y ;
+ const int i = blockIdx.x * blockDim.y + threadIdx.y ;
  const int k = threadIdx.x;
  //1 GPU thread per node/cell_ID and split
  if ( i < num_of_nodes && k < num_splits  ) {

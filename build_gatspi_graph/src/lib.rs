@@ -40,6 +40,7 @@ impl GATSPIGraph {
 
 /// Helper function to assign arcDelay to SDFLUT with proper rising/falling delay comparison
 /// arcDelay and SDFLUT[i] both contain rising delay in upper 16 bits and falling delay in lower 16 bits
+#[allow(dead_code)]
 fn assignArcDelayToSDFLUT(sdflut: &mut [u32], index: usize, arc_delay: u32) {
     let current_value = sdflut[index];
     
@@ -62,22 +63,24 @@ fn assignArcDelayToSDFLUT(sdflut: &mut [u32], index: usize, arc_delay: u32) {
 /// Helper function to assign arcDelay to SDFLUT using raw pointer for parallel processing
 /// arcDelay and SDFLUT[i] both contain rising delay in upper 16 bits and falling delay in lower 16 bits
 unsafe fn assignArcDelayToSDFLUT_ptr(sdflut_ptr: *mut u32, index: usize, arc_delay: u32) {
-    let current_value = *sdflut_ptr.add(index);
-    
-    // Extract rising delays (upper 16 bits)
-    let current_rising = (current_value >> 16) as u16;
-    let arc_rising = (arc_delay >> 16) as u16;
-    
-    // Extract falling delays (lower 16 bits)
-    let current_falling = (current_value & 0xFFFF) as u16;
-    let arc_falling = (arc_delay & 0xFFFF) as u16;
-    
-    // Take minimum of rising and falling delays separately
-    let min_rising = current_rising.min(arc_rising);
-    let min_falling = current_falling.min(arc_falling);
-    
-    // Combine back into 32-bit value and write to pointer
-    *sdflut_ptr.add(index) = ((min_rising as u32) << 16) | (min_falling as u32);
+    unsafe {
+        let current_value = *sdflut_ptr.add(index);
+        
+        // Extract rising delays (upper 16 bits)
+        let current_rising = (current_value >> 16) as u16;
+        let arc_rising = (arc_delay >> 16) as u16;
+        
+        // Extract falling delays (lower 16 bits)
+        let current_falling = (current_value & 0xFFFF) as u16;
+        let arc_falling = (arc_delay & 0xFFFF) as u16;
+        
+        // Take minimum of rising and falling delays separately
+        let min_rising = current_rising.min(arc_rising);
+        let min_falling = current_falling.min(arc_falling);
+        
+        // Combine back into 32-bit value and write to pointer
+        *sdflut_ptr.add(index) = ((min_rising as u32) << 16) | (min_falling as u32);
+    }
 }
 
 /// Find CSR indices for edges from a driver to multiple loads with specific edge IDs
@@ -161,10 +164,13 @@ fn parsePinname2id(db: &NetlistDB, pin_name_str: &str) -> Option<usize> {
    let end = if thread_id == max_threads - 1 { db.num_pins } else { (num_ports + (thread_id + 1) * parallel_stride).min(db.num_pins) };
    (start..end).filter(|&index| db.pindirect[index] == Direction::O).collect::<Vec<usize>>()
   }).collect();
+  
   //find all the top ports (input ports) that aren't assigned to a constant value (eda infra world)
   let legit_top_ports = Vec::from_iter( (0..num_ports).filter( |pin| (Some(db.pin2net[*pin]) != db.net_zero) && (Some(db.pin2net[*pin]) != db.net_one) && (db.pindirect[*pin] == Direction::O) ) );    
   these_opins.splice(0..0, legit_top_ports.clone()); 
   let these_opins2 = Vec::from(these_opins);
+ 
+  
   let stride = (these_opins2.len() + max_threads - 1) / max_threads;
   //find all the net ids (eda infra world)
   let mut these_nets : Vec<usize> = (0..max_threads).into_par_iter().flat_map(|thread_id| {
@@ -196,7 +202,7 @@ fn parsePinname2id(db: &NetlistDB, pin_name_str: &str) -> Option<usize> {
   let max_opin = these_opins2.iter().max().unwrap_or(&0);
   let mut pinid2gatspiid = UVec::new_filled(max_opin+1, max_opin+1, Device::CPU); //translation vector indexed by pin id of eda infra world that returns node id in GATSPI world
 
-  let mut num_of_gatspi_cells = these_opins2.len();
+  let num_of_gatspi_cells = these_opins2.len();
 
   let pinid2gatspiid_ptr = AtomicPtr::new(pinid2gatspiid.as_mut_ptr());
   (0..num_of_gatspi_cells).into_par_iter().for_each(|i| {
@@ -478,11 +484,18 @@ fn parsePinname2id(db: &NetlistDB, pin_name_str: &str) -> Option<usize> {
  let mut translation_dict: Vec<(String,String)> = (0..max_threads).into_par_iter().flat_map(|thread_id| {
   let start = legit_top_ports.len() + thread_id * stride;
   let end = if thread_id == max_threads - 1 { these_celltypes.len() } else { (legit_top_ports.len() + (thread_id + 1) * stride).min(these_celltypes.len()) };
-  (start..end).map(|id| ( format!("{:?}/{}", db.pinnames[these_opins2[id]].0, db.pinnames[these_opins2[id]].1).replace("HierName()/","").replace("HierName(","").replace(")/", "/") , 
+  (start..end).map(|id| ( 
+   if let None = db.pinnames[these_opins2[id]].2 { 
+       format!("{:?}/{}", db.pinnames[these_opins2[id]].0, db.pinnames[these_opins2[id]].1).replace("HierName()/","").replace("HierName(","").replace(")/", "/") 
+   } else { 
+       format!("{:?}/{}[{}]", db.pinnames[these_opins2[id]].0, db.pinnames[these_opins2[id]].1, db.pinnames[these_opins2[id]].2.unwrap()).replace("HierName()/","").replace("HierName(","").replace(")/", "/") 
+   }, 
    if let None = db.netnames[db.pin2net[these_opins2[id]]].2 { format!("{:?}/{}", db.netnames[db.pin2net[these_opins2[id]]].0, db.netnames[db.pin2net[these_opins2[id]]].1).replace("HierName()/","").replace("HierName(","").replace(")/", "/")  } 
    else { format!("{:?}/{}[{}]", db.netnames[db.pin2net[these_opins2[id]]].0, db.netnames[db.pin2net[these_opins2[id]]].1, db.netnames[db.pin2net[these_opins2[id]]].2.unwrap()).replace("HierName()/","").replace("HierName(","").replace(")/", "/") }
   ) ).collect::<Vec<_>>()
  }).collect();
+
+
 
    // Append 999 for VDD and GND nets if they exist
   if db.net_zero.is_some() {

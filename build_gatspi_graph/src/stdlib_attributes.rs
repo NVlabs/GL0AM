@@ -67,9 +67,26 @@ impl LeafPinProvider for GL0AMGenericVlibStdCellPinDefs {
     
  fn width_of(
   &self,
-  _macro_name: &CompactString,
-  _pin_name: &CompactString
+  macro_name: &CompactString,
+  pin_name: &CompactString
  ) -> Option<SVerilogRange> {
+  // Check if macro_name contains "_RAMS_" and pin_name is "dout"
+  if macro_name.as_str().contains("_RAMS_") && pin_name.as_str() == "dout" {
+    let macro_str = macro_name.as_str();
+    
+    // Find the last 'x' or 'X' in macro_name (case insensitive)
+    let last_x_pos = macro_str.rfind('x').or(macro_str.rfind('X'));
+    if let Some(last_x_pos) = last_x_pos {
+      // Extract the substring after the last 'x' or 'X'
+      let after_x = &macro_str[last_x_pos + 1..];
+      
+      // Try to parse the integer after the last 'x' or 'X'
+      if let Ok(dout_width) = after_x.parse::<isize>() {
+        return Some(SVerilogRange(dout_width - 1, 0));
+      }
+    }
+  }
+  
   None
  }
 }
