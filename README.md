@@ -1,58 +1,50 @@
-# MLCAD2025_Contest_Sim
+# GATSPI: GPU Accelerated GAte-level Simulation for Power Improvement
+
+<div style="display: flex; justify-content: space-between;">
+  <img src="https://github.com/NVlabs/GL0AM/tree/GATSPI/images/problemStatement.png" width="45%" alt="Problem Statement">
+  <img src="https://github.com/NVlabs/GL0AM/tree/GATSPI/images/Result.png" width="45%" alt="Example Result">
+</div>
 
 ## Introduction
 
-This is a branch of GL0AM that is serving the purpose of a logic cone simulator/verifier for the 2025 MLCAD Design Contest: https://asu-vda-lab.github.io/MLCAD25-Contest/ . As such, we can view it as a 'subset' form of GL0AM that _only_ simulates the combinational logic cones for a golden netlist, vs. a resynthesized netlist. The stimuli for the logic cones are created randomly, and at the end of their respective simulations, the results for the logic cone endpoints for both netlists are compared. 
+This is a branch of GL0AM that is serving the purpose of an open source version of one of GL0AM's predecessors and dependencies, [GATSPI: GPU Accelerated GAte-level Simulation for Power Improvement](https://dl.acm.org/doi/10.1145/3489517.3530601). GATSPI is a GPU accelerated re-simulator. That is to say, it takes a gate-level netlist and primary+pseudo-primary (sequential component outputs such as register, clock gate, and SRAM outputs) waveforms as input, and produces delay annotated combinational logic waveforms as outputs. More information can be found in our [publication](https://dl.acm.org/doi/10.1145/3489517.3530601). The repository includes [benchmark data](https://drive.google.com/drive/folders/1khAfeWOfm6yyPPvbvqPNNVMvKzNFj32a?usp=sharing) and a corresponding regression suite (see below) for getting started.
 
 ## Prerequisites, packages, installation
 
-We used a [Dockerfile](Dockerfile) to build a docker for the environment to run this simulator. Since this simulator is tied to the [2025 MLCAD Design Contest](https://asu-vda-lab.github.io/MLCAD25-Contest/), the Dockerfile is very similar to the one for the design contest. For the most part, the following is needed:
+We used a [Dockerfile](Dockerfile) to build a docker for the environment to run this simulator. But, for the most part, the following is needed:
 
 ### 1. Hardware Platform
   * Developed on NVIDIA GV100 GPU and Intel Xeon Platinum 8174 CPU. (But, most any GPUs should work)
 
 ### 2. Software Platform
   * OS: Ubuntu 20.04.5
-  * CUDA: nvcc-12.3
+  * CUDA: nvcc-11.8
   * CUDA driver: 550.90.07 or similar
   * Rust: 1.85.1 (though 1.82 and/or above should work)
   * Python: Python-3.8.10, with the following packages:
-    * PyTorch: 2.2.0+cu121
-    * DGL: 1.2
-    * CuPy: 12.2.0 or similar
+    * PyTorch: 2.4.0+cu118
+    * DGL: 2.4.0+cu118
+    * CuPy: 11.0.0 or similar
   
 Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt).
 
-## Setup and Trial Run
-### 0. Install Rustc and Python packages (if not using docker), Add a Git Submodule)
-```
-cd <TOP_DIR>
-git submodule update --init --recursive
-#build the rustc executable that translates Verilog into simulation graph
-cd <TOP_DIR>
-cargo build
-#if you see "Finished `dev` ..." then rustc portion is all set to go!
-```
+## Regression Suite
+1. Download the benchmark data from here.
+2. Run and follow the [regression.sh](https://github.com/NVlabs/GL0AM/blob/GATSPI/regression.sh) script.
 
-### 1. Convert Verilog Netlist to Combinational Logic Cones in CSR format
-There are a few sample netlists in <TOP_DIR>/build_gatspi_graph/tests for this trial.
+## Citation
+Though the 2nd part of GL0AM is essentially GATSPI, this branch reflects the original 2022 DAC publication version that implements 2-value re-simulation. As such, based on what is used, feel free to use the following citation:
 ```
-cargo run --bin build_gatspi_graph ./build_gatspi_graph/tests/adder.v ./gatspi/adder.pkl
-cargo run --bin build_gatspi_graph ./build_gatspi_graph/tests/adder_altCorrect.v ./gatspi/adder_altCorrect.pkl
-cargo run --bin build_gatspi_graph ./build_gatspi_graph/tests/adder_altIncorrect.v ./gatspi/adder_altIncorrect.pkl
-#"cargo run --bin build_gatspi_graph" will print the usage
-```
-### 2. Compile the CSR Graphs to Simulation Graphs, Simulate Golden and Resynthesized Logic Cones, Compare the Simulation Results
-```
-cd <TOP_DIR>/gatspi
-python3 runGatspi.py --top_name adder --graph0FilePath ./adder.pkl --graph1FilePath ./adder_altCorrect.pkl --dumpDGLGraph 1 --createStdCellLibLUT 1
-python3 runGatspi.py --top_name adder --graph0FilePath ./adder.pkl --graph1FilePath ./adder_altIncorrect.pkl --dumpDGLGraph 1
-#"python3 runGatspi.py --help" will print the usage.
-#The results of the simulation comparison is printed to STDOUT
-#Generally, we'll want --dumpDGLGraph 1 if either netlist changes
-#Generally, only need to run with --createStdCellLibLUT 1 once
-#Now, there is also added the option to add a list of output port and register /D pin connected nets into a file and only query the equivalency of those nets.
-#Example:
-python3 runGatspi.py --top_name adder --graph0FilePath ./adder.pkl --graph1FilePath ./adder_altIncorrect.pkl --dumpDGLGraph 1 --queryNetsListFile queryNets.lst
-python3 runGatspi.py --top_name adder --graph0FilePath ./adder.pkl --graph1FilePath ./adder_altCorrect.pkl --dumpDGLGraph 1 --queryNetsListFile queryNets.lst
+@article{paszke2017automatic,
+  title={Automatic differentiation in PyTorch},
+  author={Paszke, Adam and Gross, Sam and Chintala, Soumith and Chanan, Gregory and Yang, Edward and DeVito, Zachary and Lin, Zeming and Desmaison, Alban and Antiga, Luca and Lerer, Adam},
+  year={2017}
+}
+@inproceedings{10.1145/3489517.3530601,
+author = {Zhang, Yanqing and Ren, Haoxing and Sridharan, Akshay and Khailany, Brucek},
+title = {GATSPI: GPU accelerated gate-level simulation for power improvement},
+year = {2022},
+publisher = {Association for Computing Machinery},
+series = {DAC '22}
+}
 ```
