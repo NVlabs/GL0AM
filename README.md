@@ -1,8 +1,8 @@
 # GATSPI: GPU Accelerated GAte-level Simulation for Power Improvement
 
 <div style="display: flex; justify-content: space-between;">
-  <img src="https://github.com/NVlabs/GL0AM/tree/GATSPI/images/ProblemDescription.svg" width="45%" alt="Problem Statement">
-  <img src="https://github.com/NVlabs/GL0AM/tree/GATSPI/images/Result.svg" width="45%" alt="Example Result">
+  <img src="./images/ProblemDescription.svg" width="45%" alt="Problem Statement">
+  <img src="./images/Result.svg" width="45%" alt="Example Result">
 </div>
 
 ## Introduction
