@@ -35,7 +35,8 @@ Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt)
 ```tar -xvf NVDLA.tar.gz
 tar -xvf NVDLA_m.tar.gz
 tar -xvf qadd_pipe1000.tar.gz
-tar -xvf Waveforms.tar.gz```
+tar -xvf Waveforms.tar.gz
+```
 
 
 3. Run and follow the [regression.sh](https://github.com/NVlabs/GL0AM/blob/GATSPI/regression.sh) script.
