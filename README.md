@@ -30,8 +30,15 @@ Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt)
 
 ## Regression Suite
 0. Setup and install Rust with ```curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh```
-1. Download the benchmark data from [here](https://drive.google.com/drive/folders/1khAfeWOfm6yyPPvbvqPNNVMvKzNFj32a?usp=sharing). For the sake of the regression script, it will assume the data is in current_dir/GATSPIDataset, while the git cloned files are in current_dir/GL0AM
-2. Run and follow the [regression.sh](https://github.com/NVlabs/GL0AM/blob/GATSPI/regression.sh) script.
+1. Download the benchmark data from [here](https://drive.google.com/drive/folders/1khAfeWOfm6yyPPvbvqPNNVMvKzNFj32a?usp=sharing). For the sake of the regression script, it will assume the data is in current_dir/GATSPIDataset, while the git cloned files are in current_dir/GL0AM. Be sure to untar the bigger files:
+
+```tar -xvf NVDLA.tar.gz
+tar -xvf NVDLA_m.tar.gz
+tar -xvf qadd_pipe1000.tar.gz
+tar -xvf Waveforms.tar.gz```
+
+
+3. Run and follow the [regression.sh](https://github.com/NVlabs/GL0AM/blob/GATSPI/regression.sh) script.
 
 ## Citation
 Though the 2nd part of GL0AM is essentially GATSPI, this branch reflects the original 2022 DAC publication version that implements 2-value re-simulation. As such, based on what is used, feel free to use the following citation:
