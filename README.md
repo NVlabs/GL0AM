@@ -29,6 +29,7 @@ We used a [Dockerfile](Dockerfile) to build a docker for the environment to run 
 Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt).
 
 ## Regression Suite
+0. Setup and install Rust with ```curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh```
 1. Download the benchmark data from here.
 2. Run and follow the [regression.sh](https://github.com/NVlabs/GL0AM/blob/GATSPI/regression.sh) script.
 
