@@ -40,6 +40,7 @@ tar -xvf Waveforms.tar.gz
 ```
 2. Install GATSPI:
 ```
+git clone --recurse-submodules https://github.com/NVlabs/GL0AM.git --branch GATSPI
 cargo build --release
 cd saif_dumper ; pip install setuptools-rust ; pip install -e .
 cd ../
