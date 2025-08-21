@@ -105,5 +105,6 @@ python3 runGatspi.py --topName NV_nvdla --testname regression --graphFilePath ..
   echo "ERROR: Panic detected in NV_nvdla simulation. Exiting."
   exit 1
  fi
- 
+
+echo "Regression complete! ALL PASSED!"
 cd ../
