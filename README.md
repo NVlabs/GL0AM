@@ -47,7 +47,11 @@ cd saif_dumper ; pip install setuptools-rust ; pip install -e .
 cd ../
 ```
 
-3. Run and follow the [regression.sh](https://github.com/NVlabs/GL0AM/blob/GATSPI/regression.sh) script.
+3. Run and follow the [regression.sh](https://github.com/NVlabs/GL0AM/blob/GATSPI/regression.sh) script:
+```
+chmod +x regression.sh
+./regression.sh
+```
 
 ## Citation
 Though the 2nd part of GL0AM is essentially GATSPI, this branch reflects the original 2022 DAC publication version that implements 2-value re-simulation. As such, based on what is used, feel free to use the following citation:
