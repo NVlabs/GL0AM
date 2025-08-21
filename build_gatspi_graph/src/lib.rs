@@ -186,8 +186,9 @@ fn parsePinname2id(db: &NetlistDB, pin_name_str: &str) -> Option<usize> {
     these_nets.push(net_one);
   }
   
+  let stride2 = (these_nets.len() + max_threads - 1) / max_threads;
   let mut these_number_of_pins : Vec<usize> = (0..max_threads).into_par_iter().flat_map(|thread_id| {
-   let start = thread_id * stride; let end = ((thread_id + 1) * stride).min(these_nets.len());
+   let start = thread_id * stride2; let end = ((thread_id + 1) * stride2).min(these_nets.len());
    (start..end).map(|i| db.net2pin.items[db.net2pin.start[these_nets[i]]..db.net2pin.start[these_nets[i]+1]].into_iter().filter(
     |&pin| (db.pindirect[*pin] == Direction::I) && (db.pin2cell[*pin] != 0) ).map( |&pin|  db.cell2noutputs[db.pin2cell[pin]] ).sum()
    ).collect::<Vec<usize>>()
@@ -371,7 +372,7 @@ fn parsePinname2id(db: &NetlistDB, pin_name_str: &str) -> Option<usize> {
                 (0, 1 << (numIPins + 1))
             };
             
-            // Find srcID by following the path: instance → pin ID → net ID → driver pin → GATSPI ID
+            // Find srcID by following the path: instance â pin ID â net ID â driver pin â GATSPI ID
             let instance_hier_name = netlistdb::HierName::from_topdown_hier_iter(std::iter::once(instance_str));
             let ipin_name_compact = compact_str::CompactString::new_inline(&ipinName);
             let ipin_key = (instance_hier_name, ipin_name_compact, None::<isize>); // No bus index for input pins
