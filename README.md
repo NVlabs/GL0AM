@@ -32,12 +32,18 @@ Licenses for the 3rd party software can be found in [LICENSES.txt](LICENSES.txt)
 0. Setup and install Rust with ```curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh```
 1. Download the benchmark data from [here](https://drive.google.com/drive/folders/1khAfeWOfm6yyPPvbvqPNNVMvKzNFj32a?usp=sharing). For the sake of the regression script, it will assume the data is in current_dir/GATSPIDataset, while the git cloned files are in current_dir/GL0AM. Be sure to untar the bigger files:
 
-```tar -xvf NVDLA.tar.gz
+```
+tar -xvf NVDLA.tar.gz
 tar -xvf NVDLA_m.tar.gz
 tar -xvf qadd_pipe1000.tar.gz
 tar -xvf Waveforms.tar.gz
 ```
-
+2. Install GATSPI:
+```
+cargo build --release
+cd saif_dumper ; pip install setuptools-rust ; pip install -e .
+cd ../
+```
 
 3. Run and follow the [regression.sh](https://github.com/NVlabs/GL0AM/blob/GATSPI/regression.sh) script.
 
