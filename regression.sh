@@ -59,3 +59,51 @@ if [ "$SKIP_GRAPH_BUILD" = false ]; then
 else
  echo "Skipping graph building...assuming .pkl graphs already built..."
 fi
+
+cd gatspi; 
+python3 runGatspi.py --topName qadd_pipe --testname regression --graphFilePath ../qadd_pipe.pkl \
+--inputTraceFile ../../GATSPIDataset/Waveforms/qadd_pipe.waveforms_part0 --duration 6000000 --period 500 --numOfSubchunks 1 \
+--dumpDGLGraph 1 --createStdCellLibLUT 1
+../target/release/saif_dumper ../../GATSPIDataset/qadd_pipe/qadd_pipe.golden.saif qadd_pipe_regression_6000000ps.saif 0 0 > regression.log 2>&1
+ if grep -q "panic" regression.log; then
+  echo "ERROR: Panic detected in qadd_pipe simulation. Exiting."
+  exit 1
+ fi
+
+python3 runGatspi.py --topName jpeg --testname regression --graphFilePath ../jpeg.pkl \
+--inputTraceFile ../../GATSPIDataset/Waveforms/jpeg_encoder.waveforms_part0 --duration 40000000 --period 2000 --numOfSubchunks 1 \
+--dumpDGLGraph 1
+../target/release/saif_dumper ../../GATSPIDataset/jpeg/jpeg.golden.saif jpeg_regression_40000000ps.saif 0 0 > regression.log 2>&1
+ if grep -q "panic" regression.log; then
+  echo "ERROR: Panic detected in jpeg simulation. Exiting."
+  exit 1
+ fi
+
+python3 runGatspi.py --topName NVDLA_m --testname regression --graphFilePath ../NVDLA_m.pkl \
+--inputTraceFile ../../GATSPIDataset/Waveforms/NV_NVDLA_partition_m.waveforms_part0 --duration 1199984000 --period 2000 --numOfSubchunks 10 \
+--dumpDGLGraph 1
+../target/release/saif_dumper ../../GATSPIDataset/NVDLA_m/NVDLA_m.golden.saif NVDLA_m_regression_1199984000ps.saif 0 0 > regression.log 2>&1
+ if grep -q "panic" regression.log; then
+  echo "ERROR: Panic detected in NVDLA_m simulation. Exiting."
+  exit 1
+ fi
+ 
+python3 runGatspi.py --topName qadd_pipe1000 --testname regression --graphFilePath ../qadd_pipe1000.pkl \
+--inputTraceFile ../../GATSPIDataset/Waveforms/qadd_pipe1000.waveforms_part0 --duration 3000000 --period 500 --numOfSubchunks 1 \
+--dumpDGLGraph 1
+../target/release/saif_dumper ../../GATSPIDataset/qadd_pipe1000/qadd_pipe1000.golden.saif qadd_pipe1000_regression_3000000ps.saif 0 0 > regression.log 2>&1
+ if grep -q "panic" regression.log; then
+  echo "ERROR: Panic detected in qadd_pipe1000 simulation. Exiting."
+  exit 1
+ fi
+ 
+python3 runGatspi.py --topName NV_nvdla --testname regression --graphFilePath ../NV_nvdla.pkl \
+--inputTraceFile ../../GATSPIDataset/Waveforms/NV_nvdla.waveforms_part0 --duration 1299976000 --period 2000 --numOfSubchunks 12 \
+--dumpDGLGraph 1
+../target/release/saif_dumper ../../GATSPIDataset/NVDLA/NV_nvdla.golden.saif NV_nvdla_regression_1299976000ps.saif 0 0 > regression.log 2>&1
+ if grep -q "panic" regression.log; then
+  echo "ERROR: Panic detected in NV_nvdla simulation. Exiting."
+  exit 1
+ fi
+ 
+cd ../
