@@ -330,7 +330,7 @@ fn parsePinname2id(db: &NetlistDB, pin_name_str: &str) -> Option<usize> {
         let celltype_compact = compact_str::CompactString::new_inline(fullCelltype_str);
         
         // Get the output pin name from the first tuple in parsed_results
-        let (_, _, output_pin, _) = parsed_results.first().unwrap();
+        let (_, _, output_pin, _, _) = parsed_results.first().unwrap();
         let pin_name_compact = compact_str::CompactString::new_inline(output_pin);
         
         let top_name_compact = compact_str::CompactString::new_inline(&db.name);
@@ -341,7 +341,7 @@ fn parsePinname2id(db: &NetlistDB, pin_name_str: &str) -> Option<usize> {
 
         // Process each tuple in parsed_results
         for parsed_tuple in parsed_results {
-          let (CONDs, arcInputPin, arcOutputPin, arcDelay) = parsed_tuple;
+          let (CONDs, arcInputPin, arcOutputPin, arcDelay, sdf_line) = parsed_tuple;
           
           // Get dstID by converting instance_str to HierName and looking up pin
           let instance_hier_name = netlistdb::HierName::from_topdown_hier_iter(std::iter::once(instance_str));
@@ -375,7 +375,7 @@ fn parsePinname2id(db: &NetlistDB, pin_name_str: &str) -> Option<usize> {
             // Find srcID by following the path: instance â pin ID â net ID â driver pin â GATSPI ID
             let instance_hier_name = netlistdb::HierName::from_topdown_hier_iter(std::iter::once(instance_str));
             let ipin_name_compact = compact_str::CompactString::new_inline(&ipinName);
-            let ipin_key = (instance_hier_name, ipin_name_compact, None::<isize>); // No bus index for input pins
+            let ipin_key = (instance_hier_name, ipin_name_compact.clone(), None::<isize>); // No bus index for input pins
             
             if let Some(&eda_pin_id) = db.pinname2id.get(&ipin_key) {
                 // Find the connecting net's ID
@@ -392,19 +392,20 @@ fn parsePinname2id(db: &NetlistDB, pin_name_str: &str) -> Option<usize> {
                     let srcID = pinid2gatspiid[driver_pin];
                     
                     // Find edge_id by reverse searching celltypeHash and looking up pintypeHash
-                    // First, get the celltypeCoreName using the same logic as GL0AMStdLib::get_celltype
-                    let celltypeCoreName = {
-                        let parts: Vec<&str> = fullCelltype_str.split('_').collect();
-                        if parts.len() >= 2 {
-                            parts[1]
-                        } else {
-                            fullCelltype_str
-                        }
-                    };
-                    
-                    let pintype_key = format!("{}/{}", celltypeCoreName, ipinName);
+                    let celltype_core_name = stdlib_info.core_name(&celltype_compact, &ipin_name_compact);
+                    let pintype_key = format!("{}/{}", celltype_core_name, ipinName);
                     let edge_id_value = *stdlib_attributes::pintypeHash.get(pintype_key.as_str())
                         .expect(&format!("Could not find edge_id in pintypeHash for key='{}'", pintype_key));
+                    
+                    if let Some(conds) = CONDs {
+                        let min_required = numIPins.saturating_sub(1) as usize;
+                        if conds.len() < min_required {
+                            panic!(
+                                "cell: {} with SDF line: {} does not have enough conditions! exiting!...",
+                                instance_str, sdf_line
+                            );
+                        }
+                    }
                     
                     // Get SDFLUTBasePointer using findCSRIndices4Loads
                     let loads = vec![dstID];
@@ -437,21 +438,40 @@ fn parsePinname2id(db: &NetlistDB, pin_name_str: &str) -> Option<usize> {
                              for cond_tuple in CONDs.as_ref().unwrap() {
                                  let (cond_pin, cond_value) = cond_tuple;
                                  if *cond_value == 1 {
-                                     let cond_pintype_key = format!("{}/{}", celltypeCoreName, cond_pin);
+                                    let cond_pintype_key = format!("{}/{}", celltype_core_name, cond_pin);
                                      let n = *stdlib_attributes::pintypeHash.get(cond_pintype_key.as_str())
                                          .expect(&format!("Could not find cond_pintype_key in pintypeHash: '{}'", cond_pintype_key));
                                      specificArcOffset += 1 << n;
                                  }
                              }
                              
-                             // Assign arcDelay to specific indices in SDFLUT
-                             Self::assignArcDelayToSDFLUT_ptr(ptr, SDFLUTBasePointer + specificArcOffset, *arcDelay);
-                             Self::assignArcDelayToSDFLUT_ptr(ptr, SDFLUTBasePointer + specificArcOffset + (1 << edge_id_value), *arcDelay);
+                            // Assign arcDelay to specific indices in SDFLUT
+                            let should_overwrite = stdlib_info.cond_sdf_overwrite();
+                            let indices = [
+                                SDFLUTBasePointer + specificArcOffset,
+                                SDFLUTBasePointer + specificArcOffset + (1 << edge_id_value),
+                            ];
+                            for index in indices {
+                                if should_overwrite {
+                                    *ptr.add(index) = *arcDelay;
+                                } else {
+                                    Self::assignArcDelayToSDFLUT_ptr(ptr, index, *arcDelay);
+                                }
+                            }
                              
                              // If baseSDFEntryStride equals 1 << (numIPins + 1), assign to additional indices
                              if baseSDFEntryStride == 1 << (numIPins + 1) {
-                                 Self::assignArcDelayToSDFLUT_ptr(ptr, SDFLUTBasePointer + specificArcOffset + (1 << numIPins), *arcDelay);
-                                 Self::assignArcDelayToSDFLUT_ptr(ptr, SDFLUTBasePointer + specificArcOffset + (1 << edge_id_value) + (1 << numIPins), *arcDelay);
+                                let extra_indices = [
+                                    SDFLUTBasePointer + specificArcOffset + (1 << numIPins),
+                                    SDFLUTBasePointer + specificArcOffset + (1 << edge_id_value) + (1 << numIPins),
+                                ];
+                                for index in extra_indices {
+                                    if should_overwrite {
+                                        *ptr.add(index) = *arcDelay;
+                                    } else {
+                                        Self::assignArcDelayToSDFLUT_ptr(ptr, index, *arcDelay);
+                                    }
+                                }
                              }
                          }
                     }

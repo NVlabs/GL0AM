@@ -9,6 +9,7 @@ use sverilogparse::*;
 //Will need to edit this file to suit your std cell lib definition
 lazy_static! {
     pub static ref SEQ_REGEX: Regex = Regex::new(r".*(_DF|_LATCH_|_CLKGATE_|_RAMS_|_SYNC).*").unwrap();
+    pub static ref ASAP7_SEQ_REGEX: Regex = Regex::new(r".*(DFF|DHL|DLL|SDF|ICG).*?_ASAP7_75t_.*").unwrap();
 }
 
 /// standard cell celltype numerical attributes, and cell pin type numerical attributes
@@ -91,6 +92,52 @@ impl LeafPinProvider for GL0AMGenericVlibStdCellPinDefs {
  }
 }
 
+pub struct ASAP7VlibStdCEllPinDefs();
+impl LeafPinProvider for ASAP7VlibStdCEllPinDefs {
+ fn direction_of(
+  &self,
+  macro_name: &CompactString,
+  pin_name: &CompactString, pin_idx: Option<isize>
+  ) -> Direction {
+  if macro_name.as_str().contains("TIEH") || macro_name.as_str().contains("TIEL") {
+   use netlistdb::{GeneralPinName, HierName};
+   panic!("Found TIEH/TIEL cell {}, please preprocess tie cells before GATSPI graph construction.",
+    (HierName::single(macro_name.clone()),
+    pin_name, pin_idx).dbg_fmt_pin());
+  }
+  if let true = ASAP7_SEQ_REGEX.is_match(macro_name.as_str()) {
+   match pin_name.as_str() {
+    "Q" | "QN" | "GCLK" | "rd_out" => Direction::O,
+    "D" | "CLK" | "RESETN" | "SETN" | "ENA" | "SE" | "SI" | "SET" | "addr_in" | "ce_in" | "clk" | "wd_in" | "we_in" => Direction::Unknown,
+    _ => {
+     use netlistdb::{GeneralPinName, HierName};
+     panic!("Cannot recognize sequential pin type {}, please make sure the verilog netlist is synthesized from ASAP7 tech lib.",
+     (HierName::single(macro_name.clone()),
+     pin_name, pin_idx).dbg_fmt_pin());
+    }
+   }
+  } else {
+   match pin_name.as_str() {
+    "Y" | "CON" | "SN" => Direction::O,
+    "A" | "B" | "C" | "D" | "E" | "A1" | "A2" | "A3" | "A4" | "B1" | "B2" | "B3" | "B4" |
+    "C1" | "C2" | "C3" | "C4" | "CI" => Direction::I,
+    _ => {
+     use netlistdb::{GeneralPinName, HierName};
+     panic!("Cannot recognize unknown pin type {}, please make sure the verilog netlist is synthesized from ASAP7 tech lib.",
+     (HierName::single(macro_name.clone()),
+     pin_name, pin_idx).dbg_fmt_pin());
+    }
+   }
+  }
+ }
+ fn width_of(
+  &self,
+  _macro_name: &CompactString,
+  _pin_name: &CompactString
+ ) -> Option<SVerilogRange> {
+  None
+ }
+}
 /* pub struct StdCellPinDefs();
 impl LeafPinProvider for StdCellPinDefs {
  fn direction_of(
@@ -148,6 +195,16 @@ pub trait StandardCellTypeAttribute {
         macro_name: &CompactString,
         pin_name: &CompactString
     ) -> u8;
+
+    /// Return the core celltype name used for pintype lookup.
+    fn core_name(
+        &self,
+        macro_name: &CompactString,
+        pin_name: &CompactString
+    ) -> String;
+
+    /// When true, conditional SDF entries overwrite existing values.
+    fn cond_sdf_overwrite(&self) -> bool;
 }
 
 lazy_static! {
@@ -807,6 +864,12 @@ lazy_static! {
   ("OAOI211/A2", 2),
   ("OAOI211/B", 1),
   ("OAOI211/C", 0),
+  ("BUF/A", 0),
+  ("INV/A", 0),
+  ("XNOR2/A", 1),
+  ("XNOR2/B", 0),
+  ("XOR2/A", 1),
+  ("XOR2/B", 0),
  ]);
 }
 
@@ -931,24 +994,32 @@ lazy_static! {
  ];
 }
 
-/*
-pub struct MLCADDesignContest2025StdLib();
 
-impl StandardCellTypeAttribute for MLCADDesignContest2025StdLib {
+pub struct ASAP7StdLib();
+
+impl StandardCellTypeAttribute for ASAP7StdLib {
  fn get_celltype(
   &self,
   macro_name: &CompactString, pin_name: &CompactString, top_name: &CompactString,
   ) -> u16 {
-   let celltype_name = 
-    if (macro_name.split("x").collect::<Vec<_>>()[0] != CompactString::from("HA")) &&
-    (macro_name.split("x").collect::<Vec<_>>()[0] != CompactString::from("FA")) { macro_name.split("x").collect::<Vec<_>>()[0] } 
-    else { &(format!("{}{}", macro_name.split("x").collect::<Vec<_>>()[0], pin_name)) };
-   match celltypeHash.get(&celltype_name) {
+  let macro_str = macro_name.as_str();
+  let base_name = if let Some((prefix, _)) = macro_str.split_once("_ASAP7_75t_") {
+   prefix
+  } else {
+   macro_str
+  };
+  let core_name = base_name.split('x').next().unwrap_or(base_name);
+  let celltype_name = if core_name != "HA" && core_name != "FA" {
+   core_name.to_string()
+  } else {
+   format!("{}{}", core_name, pin_name)
+  };
+  match celltypeHash.get(celltype_name.as_str()) {
     Some(number) => *number,
-    _ => match SEQ_REGEX.is_match(macro_name.as_str()) || macro_name == top_name {
+   _ => match ASAP7_SEQ_REGEX.is_match(macro_str) || macro_name == top_name {
      true => 999,
      _ => {use netlistdb::{HierName};
-           panic!("Cannot recognize unknown celltype type {}, please make sure the verilog netlist is synthesized from Contest tech lib.",
+           panic!("Cannot recognize unknown celltype type {}, please make sure the verilog netlist is synthesized from ASAP7 tech lib.",
            HierName::single(macro_name.clone()))
           }
     }
@@ -961,20 +1032,43 @@ impl StandardCellTypeAttribute for MLCADDesignContest2025StdLib {
   macro_name: &CompactString,
   pin_name: &CompactString
   ) -> u8 {
-   let celltype_name = macro_name.split("x").collect::<Vec<_>>()[0];
-   let pintype_hashkey : &str = &(format!("{}/{}", celltype_name, *pin_name));
-   match pintypeHash.get(pintype_hashkey) {
-    Some(number) => *number,
-    _ => {
-           panic!("Cannot recognize unknown pin type {}, please make sure the verilog netlist is synthesized from Contest tech lib.",
-           pintype_hashkey)
-          }
-   }
+  let macro_str = macro_name.as_str();
+  let base_name = if let Some((prefix, _)) = macro_str.split_once("_ASAP7_75t_") {
+   prefix
+  } else {
+   macro_str
+  };
+  let core_name = base_name.split('x').next().unwrap_or(base_name);
+  let pintype_hashkey : &str = &(format!("{}/{}", core_name, *pin_name));
+  match pintypeHash.get(pintype_hashkey) {
+   Some(number) => *number,
+   _ => {
+          panic!("Cannot recognize unknown pin type {}, please make sure the verilog netlist is synthesized from ASAP7 tech lib.",
+          pintype_hashkey)
+         }
   }
+ }
 
+ fn core_name(
+  &self,
+  macro_name: &CompactString,
+  _pin_name: &CompactString
+  ) -> String {
+  let macro_str = macro_name.as_str();
+  let base_name = if let Some((prefix, _)) = macro_str.split_once("_ASAP7_75t_") {
+   prefix
+  } else {
+   macro_str
+  };
+  let core_name = base_name.split('x').next().unwrap_or(base_name);
+  core_name.to_string()
+ }
 
+ fn cond_sdf_overwrite(&self) -> bool {
+  true
+ }
 }
-*/
+
 
 pub struct GL0AMStdLib();
 impl StandardCellTypeAttribute for GL0AMStdLib {
@@ -1024,15 +1118,30 @@ impl StandardCellTypeAttribute for GL0AMStdLib {
      macro_name.as_str()
     }
    };
-   let pintype_hashkey : &str = &(format!("{}/{}", celltype_name, *pin_name));
-   match pintypeHash.get(pintype_hashkey) {
-    Some(number) => *number,
-    _ => {
-           panic!("Cannot recognize unknown pin type {}, please make sure the verilog netlist is synthesized from Contest tech lib.",
-           pintype_hashkey)
-          }
-   }
+  let pintype_hashkey : &str = &(format!("{}/{}", celltype_name, *pin_name));
+  match pintypeHash.get(pintype_hashkey) {
+   Some(number) => *number,
+   _ => {
+          panic!("Cannot recognize unknown pin type {}, please make sure the verilog netlist is synthesized from Contest tech lib.",
+          pintype_hashkey)
+         }
   }
+ }
 
+ fn core_name(
+  &self,
+  macro_name: &CompactString,
+  _pin_name: &CompactString
+  ) -> String {
+  let parts: Vec<&str> = macro_name.split('_').collect();
+  if parts.len() >= 2 {
+   parts[1].to_string()
+  } else {
+   macro_name.as_str().to_string()
+  }
+ }
 
+ fn cond_sdf_overwrite(&self) -> bool {
+  false
+ }
 }

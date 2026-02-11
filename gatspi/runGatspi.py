@@ -7,7 +7,7 @@ def main():
  parser.add_argument('--instanceName', type=str, default = 'uut', help = 'instance name in SAIF header')
  parser.add_argument('--testname', type=str, help = 'test name, used in SAIF header')
  parser.add_argument('--graphFilePath', type=str, help='raw csr graph file path, or stored DGL graph file path')
- parser.add_argument('--inputTraceFile', type = str, help = 'path to the input trace file')
+ parser.add_argument('--inputTraceFile', type = str, default=None, help = 'path to the input trace file. None value will generate random source waveforms')
  parser.add_argument('--duration', type = int, help = 'Duration of the test, in ps')
  parser.add_argument('--period', type =int, help = 'clock period, in ps')
  parser.add_argument('--numOfSubchunks', type = int, help = 'number of sub chunk divisions needed to get through the whole test, increase for longer tests or GPU buffer memory will overflow')

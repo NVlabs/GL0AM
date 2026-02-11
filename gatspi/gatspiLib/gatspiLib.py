@@ -28,11 +28,31 @@ exec(open(str(cd) + '/gatspiLib/GATSPI.cupy').read())
 def load_graph(pkl):
  now=datetime.now()
  data = np.load(pkl, allow_pickle=1)
+ # Expect pickled object dicts only.
+ if isinstance(data, np.ndarray) and data.dtype == object:
+  data = data.item()
+ if not isinstance(data, dict):
+  raise TypeError("Expected pickled object dict from np.load; got {}".format(type(data)))
  print("pkl loaded")
  print('start create DGL graph')
  g = dgl.graph(('csr', (data['start'], data['items'], [])))
- g.edata['x'] = th.ByteTensor(data['values']) ; g.edata['SDFPointerStart'] = th.LongTensor(data['SDFPointerStart'])
- g.edata['SDFPointerEnd'] = th.LongTensor(data['SDFPointerEnd']) ; g.edata['interconnectDelays'] = th.IntTensor(data['interconnectDelays'])
+ g.edata['x'] = th.ByteTensor(data['values'])
+ num_edges = int(data['start'][-1])
+ sdf_lut = data.get('SDFLUT')
+ sdf_lut_is_none = (sdf_lut is None) or (hasattr(sdf_lut, 'dtype') and sdf_lut.dtype == object and sdf_lut.shape == () and sdf_lut.item() is None)
+ if sdf_lut_is_none:
+  # No SDF data provided; default to zero delays.
+  g.edata['SDFPointerStart'] = th.zeros(num_edges, dtype=th.long)
+  g.edata['SDFPointerEnd'] = th.zeros(num_edges, dtype=th.long)
+  g.edata['interconnectDelays'] = th.zeros(num_edges, dtype=th.int)
+  SDFLUT = th.zeros(1024, dtype=th.uint32).view(th.int32)
+  print("No SDF found; using zero-delay SDFLUT")
+ else:
+  g.edata['SDFPointerStart'] = th.LongTensor(data['SDFPointerStart'])
+  g.edata['SDFPointerEnd'] = th.LongTensor(data['SDFPointerEnd'])
+  g.edata['interconnectDelays'] = th.IntTensor(data['interconnectDelays'])
+  SDFLUT = th.tensor(sdf_lut, dtype=th.uint32).view(th.int32)
+  print("SDF Loaded")
  g.ndata['celltype'] = th.ShortTensor(data['gatspi_celltypes'])
  #"global variables"
  num_of_gatspi_cells = data['num_of_gatspi_cells'] ; num_of_top_ports = data['num_of_top_ports'] ;
@@ -43,8 +63,6 @@ def load_graph(pkl):
  driverPin2id = {value[0]: key for key, value in tempPortDict.items()}
  net2id = {value[1]: key for key, value in tempPortDict.items()}   
  print("graph created")
- SDFLUT = th.IntTensor(data['SDFLUT']) ;
- print("SDF Loaded")
  later=datetime.now()
  delta=(later-now).total_seconds()
  print("creating the DGL graph took " + str(delta) + " seconds on the CPU")
@@ -277,9 +295,14 @@ class GATSPI:
   self.g = self.g.to(self.DEVICE)
  
  def loadWaveforms(self):
-  temp_start = timer() ; print("Loading the input/pseudo-input waveform pkl file...")
-  waveforms = np.load(self.inputTraceFile,allow_pickle=1)
-  waveforms = waveforms['waveforms'] ;
+  temp_start = timer()
+  if self.inputTraceFile is None:
+   print("No input waveform file provided; generating random source waveforms...")
+   waveforms = {}
+  else:
+   print("Loading the input/pseudo-input waveform pkl file...")
+   waveforms = np.load(self.inputTraceFile,allow_pickle=1)
+   waveforms = waveforms['waveforms'] ;
   self.fold_split = math.ceil( self.testDuration / (self.PARALLEL_CYCLES*self.numOfSubchunks*self.period) ) *self.period
   assert self.testDuration >= (self.numOfSubchunks-1)*self.PARALLEL_CYCLES*self.fold_split, "Lower number of subchunks, else test duration will OVERFLOW"
   print("Folding the test duration into " + str(self.PARALLEL_CYCLES) + " parallel cycles. Each window will simulate: " + str(self.fold_split) + " time units.")
@@ -288,16 +311,36 @@ class GATSPI:
   self.g.ndata['waveform_start'] = th.LongTensor( [2*x for x in range(self.PARALLEL_CYCLES)] ).unsqueeze(0).repeat(len(self.g.nodes()), 1).type(th.int64)
   self.g.ndata['waveform_end'] = th.LongTensor( [2*x+2 for x in range(self.PARALLEL_CYCLES)] ).unsqueeze(0).repeat(len(self.g.nodes()), 1).type(th.int64)
   input_w = [] ; node_nums = [] ; waveform_lengths = [0]; new_length =0;
-  for pin in list( waveforms.keys() ):
-   if pin[1].isalpha():
-    adjusted_pinname=re.sub(r'^\\','', pin)
-   else:
-    adjusted_pinname = pin
-   if adjusted_pinname in self.driverPin2id.keys():
-    node_nums.append(self.driverPin2id[adjusted_pinname])
-    input_w.append(th.LongTensor(waveforms[pin]))
-    new_length +=waveforms[pin].shape[0]
+  if self.inputTraceFile is None:
+   rng = np.random.default_rng()
+   source_nodes = (self.g.in_degrees() == 0).nonzero().squeeze().tolist()
+   if isinstance(source_nodes, int):
+    source_nodes = [source_nodes]
+   for node_id in source_nodes:
+    node_nums.append(node_id)
+    # Initialize waveform with a random logic value.
+    current = int(rng.integers(0, 2))
+    wf = [-1, 0] if current == 1 else [0]
+    for t in range(2 * self.period, self.testDuration, 2 * self.period):
+     next_val = int(rng.integers(0, 2))
+     if next_val != current:
+      wf.append(t)
+      current = next_val
+    wf_arr = np.array(wf, dtype=np.int64)
+    input_w.append(th.LongTensor(wf_arr))
+    new_length += wf_arr.shape[0]
     waveform_lengths.append(new_length)
+  else:
+   for pin in list( waveforms.keys() ):
+    if pin[1].isalpha():
+     adjusted_pinname=re.sub(r'^\\','', pin)
+    else:
+     adjusted_pinname = pin
+    if adjusted_pinname in self.driverPin2id.keys():
+     node_nums.append(self.driverPin2id[adjusted_pinname])
+     input_w.append(th.LongTensor(waveforms[pin]))
+     new_length +=waveforms[pin].shape[0]
+     waveform_lengths.append(new_length)
   node_nums = th.LongTensor(node_nums) #node_nums still on the CPU for now
   input_w = th.cat(input_w) #input_w still on the CPU for now
   input_waveform_length_start_pointers=th.LongTensor(waveform_lengths[0:-1], device="cpu")

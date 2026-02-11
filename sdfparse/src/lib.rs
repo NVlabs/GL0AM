@@ -14,7 +14,7 @@ pub struct sdfParse {
  pub designName: String,
  pub timeUnit: f32,
  pub parseInterconnectResults: Vec<Option<(String, String, u32)>>,
- pub parseAllCellsResults: Vec<Option<(String, String, Vec<(Option<Vec<(String, u8)>>, String, String, u32)>)>>
+ pub parseAllCellsResults: Vec<Option<(String, String, Vec<(Option<Vec<(String, u8)>>, String, String, u32, String)>)>>
 }
 
 pub fn print_type<T>(_: &T) { 
@@ -99,12 +99,12 @@ impl sdfParse {
   let firstCellResultWithCond = parseAllCellsResults.iter()
     .filter_map(|result| result.as_ref())
     .find(|(_, _, parsed_results)| {
-      parsed_results.iter().any(|(cond, _, _, _)| cond.is_some())
+      parsed_results.iter().any(|(cond, _, _, _, _)| cond.is_some())
     });
   let firstCellResultWithEdge = parseAllCellsResults.iter()
     .filter_map(|result| result.as_ref())
     .find(|(_, _, parsed_results)| {
-      parsed_results.iter().any(|(_, input_pin, _, _)| input_pin.contains("edge"))
+      parsed_results.iter().any(|(_, input_pin, _, _, _)| input_pin.contains("edge"))
     });
   println!("Sample INTERCONNECT delay parsing result: {:?}", firstInterconnectResult);
   println!("Sample INSTANCE delay parsing result: {:?}", firstCellResult);
@@ -225,6 +225,24 @@ impl sdfParse {
   
  pub fn parseConditionalContent<'a>(cond_str: &'a str) -> Vec<(String, u8)> {
   let mut result = Vec::new();
+ if !cond_str.contains("==") {
+  // Format like (~A1&~A2&B1)
+  let cond_parts: Vec<&str> = cond_str.split('&').collect();
+  for part in cond_parts {
+   let cleaned = part.trim().trim_matches('(').trim_matches(')').replace(' ', "");
+   if cleaned.is_empty() {
+    continue;
+   }
+   if cleaned.contains('~') {
+    let pin_name = cleaned.replace('~', "");
+    if !pin_name.is_empty() {
+     result.push((pin_name, 0));
+    }
+   } else {
+    result.push((cleaned, 1));
+   }
+  }
+ } else {
   // Split by '&&' delimiter
   let cond_parts: Vec<&str> = cond_str.split("&&").collect();
   for part in cond_parts {
@@ -243,6 +261,7 @@ impl sdfParse {
     }
    }
   }
+ }
   result
  }
   
@@ -269,7 +288,7 @@ impl sdfParse {
   parseInterconnectResults
  }
 
- pub fn parseCell<'a>(chunk: &'a [u8], timeUnit: f32) -> Option<(String, String, Vec<(Option<Vec<(String, u8)>>, String, String, u32)>)> { 
+ pub fn parseCell<'a>(chunk: &'a [u8], timeUnit: f32) -> Option<(String, String, Vec<(Option<Vec<(String, u8)>>, String, String, u32, String)>)> { 
   if let Some(captured) = CELL_REGEX.captures(chunk) {
    let celltype = captured.get(1)? ; let instance = captured.get(2)?; let delay = captured.get(3)?;
    let celltype_str = std::str::from_utf8(celltype.as_bytes()).ok()?.to_string(); 
@@ -282,17 +301,41 @@ impl sdfParse {
    let instance_str = std::str::from_utf8(instance.as_bytes()).ok()?.to_string();
    let delay_str = std::str::from_utf8(delay.as_bytes()).ok()?;
    // Parse delay_str line by line
-   let lines: Vec<&str> = delay_str.split('\n').collect();
+  let lines: Vec<&str> = delay_str.split('\n').collect();
    let mut parsed_results = Vec::new();
    for line in lines {
-    if line.contains("(COND ") {
+    if line.contains("(CONDELSE") {
+     // Treat CONDELSE as an unconditional IOPATH.
+      if let Some(iopath_pos) = line.find("(IOPATH") {
+      let iopath_line = &line[iopath_pos..];
+      if let Some(line_captured) = IOPATH_DELAY_REGEX.captures(iopath_line) {
+       let iopath_content = line_captured.get(1).map(|m| m.as_str()).unwrap_or(""); // First capture group (IOPATH content)
+       let delays = line_captured.get(2).map(|m| m.as_str()).unwrap_or(""); // Second capture group (delays including the opening delimiter)
+       // Split iopath_content into input_pin and output_pin
+       let parts: Vec<&str> = iopath_content.split_whitespace().collect();
+       let (input_pin, output_pin) = if parts.len() >= 2 {
+        let last_part = parts.last().unwrap();
+        // Find the position of the last whitespace to split the string
+        let last_whitespace_pos = iopath_content.rfind(' ').unwrap();
+        let input_pin = &iopath_content[..last_whitespace_pos];
+        (input_pin.to_string(), last_part.to_string())
+       } else {
+        (iopath_content.to_string(), "".to_string()) // If only one part, treat it as input_pin
+       };
+       let delay_value = sdfParse::parseDelayGroups(delays, timeUnit);
+       parsed_results.push((None, input_pin, output_pin, delay_value, line.to_string())); // None for cond since CONDELSE is unconditional
+      } else {
+       panic!("Line with CONDELSE does not match the expected IOPATH pattern: {}", line);
+      }
+     } else {
+      panic!("Line with CONDELSE does not contain IOPATH: {}", line);
+     }
+    } else if line.contains("(COND ") {
      // Use COND_DELAY_REGEX for lines with conditional content
      if let Some(line_captured) = COND_DELAY_REGEX.captures(line) {
       let cond_str = line_captured.get(1).map(|m| m.as_str()).unwrap_or(""); // First capture group (COND)
       let iopath_content = line_captured.get(2).map(|m| m.as_str()).unwrap_or(""); // Second capture group (IOPATH content)
       let delays = line_captured.get(3).map(|m| m.as_str()).unwrap_or(""); // Third capture group (delays including the opening delimiter)
-      // Parse conditional content
-      let cond = Some(sdfParse::parseConditionalContent(cond_str));
       // Split iopath_content into input_pin and output_pin
       let parts: Vec<&str> = iopath_content.split_whitespace().collect();
       let (input_pin, output_pin) = if parts.len() >= 2 {
@@ -305,7 +348,18 @@ impl sdfParse {
        (iopath_content.to_string(), "".to_string()) // If only one part, treat it as input_pin
       };
       let delay_value = sdfParse::parseDelayGroups(delays, timeUnit);
-      parsed_results.push((cond, input_pin, output_pin, delay_value));
+      if cond_str.contains('|') {
+       let cond_parts: Vec<&str> = cond_str.split('|').collect();
+       for cond_part in cond_parts {
+        let cleaned = cond_part.trim().trim_matches('(').trim_matches(')');
+        let cond = Some(sdfParse::parseConditionalContent(cleaned));
+        parsed_results.push((cond, input_pin.clone(), output_pin.clone(), delay_value, line.to_string()));
+       }
+      } else {
+       // Parse conditional content
+       let cond = Some(sdfParse::parseConditionalContent(cond_str));
+       parsed_results.push((cond, input_pin, output_pin, delay_value, line.to_string()));
+      }
      } else {
       panic!("Line with COND does not match the expected pattern: {}", line);
      }
@@ -326,7 +380,7 @@ impl sdfParse {
         (iopath_content.to_string(), "".to_string()) // If only one part, treat it as input_pin
        };
        let delay_value = sdfParse::parseDelayGroups(delays, timeUnit);
-       parsed_results.push((None, input_pin, output_pin, delay_value)); // None for cond since no COND
+       parsed_results.push((None, input_pin, output_pin, delay_value, line.to_string())); // None for cond since no COND
       } else {
        panic!("Line without COND does not match the expected pattern: {}", line);
       }
@@ -337,7 +391,7 @@ impl sdfParse {
   None
  }
 
- pub fn parseAllCellDelays<'a>(s: &'a [u8], cellPositions: Vec<usize>, remainderIndex: usize, timeUnit: f32) -> Vec<Option<(String, String, Vec<(Option<Vec<(String, u8)>>, String, String, u32)>)>> { 
+pub fn parseAllCellDelays<'a>(s: &'a [u8], cellPositions: Vec<usize>, remainderIndex: usize, timeUnit: f32) -> Vec<Option<(String, String, Vec<(Option<Vec<(String, u8)>>, String, String, u32, String)>)>> { 
   let mut chunks: Vec<&[u8]> = Vec::with_capacity(cellPositions.len());
   for i in 0..cellPositions.len()-1 {
    chunks.push(&s[remainderIndex+cellPositions[i]..remainderIndex+cellPositions[i+1]]);

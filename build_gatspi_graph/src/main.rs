@@ -16,16 +16,40 @@ fn main() {
     clilog::enable_timer("total_program");
     
     let time_total = clilog::stimer!("total_program");
-    let args: Vec<String> = env::args().collect();
+    let raw_args: Vec<String> = env::args().collect();
+    let mut tech: Option<String> = None;
+    let mut args: Vec<String> = Vec::with_capacity(raw_args.len());
+    args.push(raw_args[0].clone());
+    let mut i = 1;
+    while i < raw_args.len() {
+        if raw_args[i] == "--tech" {
+            if i + 1 >= raw_args.len() {
+                panic!("--tech requires a value (e.g., --tech asap7)");
+            }
+            tech = Some(raw_args[i + 1].clone());
+            i += 2;
+        } else {
+            args.push(raw_args[i].clone());
+            i += 1;
+        }
+    }
     assert!(args.len() >= 3 && args.len() <= 5,
-            "Usage: {} <verilog_path> <pickle_dump_file_path> [<top_module>] [<sdf_file_path>]", args[0]);
+            "Usage: {} <verilog_path> <pickle_dump_file_path> [<top_module>] [<sdf_file_path>] [--tech asap7]", args[0]);
 
     let time_parse_verilog = clilog::stimer!("parse_verilog");
-    let db = NetlistDB::from_sverilog_file(
-        &args[1],
-        args.get(3).map(|x| x.as_ref()),
-        &build_gatspi_graph::stdlib_attributes::GL0AMGenericVlibStdCellPinDefs()
-    ).expect("Error parsing the verilog into netlist");
+    let db = match tech.as_deref() {
+        Some("asap7") => NetlistDB::from_sverilog_file(
+            &args[1],
+            args.get(3).map(|x| x.as_ref()),
+            &build_gatspi_graph::stdlib_attributes::ASAP7VlibStdCEllPinDefs()
+        ),
+        Some(other) => panic!("Unknown --tech value '{}'. Supported values: asap7", other),
+        None => NetlistDB::from_sverilog_file(
+            &args[1],
+            args.get(3).map(|x| x.as_ref()),
+            &build_gatspi_graph::stdlib_attributes::GL0AMGenericVlibStdCellPinDefs()
+        ),
+    }.expect("Error parsing the verilog into netlist");
     clilog::finish!(time_parse_verilog);
 
     println!("Benchmark statistics for {}", args[1]);
@@ -38,7 +62,19 @@ fn main() {
     let sdf_path = args.get(4).map(|path| std::path::Path::new(path));
 
     let time_build_gatspi = clilog::stimer!("build_gatspi");
-    let x = GATSPIGraph::build_graph(&db, &build_gatspi_graph::stdlib_attributes::GL0AMStdLib(), sdf_path);
+    let x = match tech.as_deref() {
+        Some("asap7") => GATSPIGraph::build_graph(
+            &db,
+            &build_gatspi_graph::stdlib_attributes::ASAP7StdLib(),
+            sdf_path
+        ),
+        Some(other) => panic!("Unknown --tech value '{}'. Supported values: asap7", other),
+        None => GATSPIGraph::build_graph(
+            &db,
+            &build_gatspi_graph::stdlib_attributes::GL0AMStdLib(),
+            sdf_path
+        ),
+    };
     print_type(&x);
     clilog::finish!(time_build_gatspi);
 
